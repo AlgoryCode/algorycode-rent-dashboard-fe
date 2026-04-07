@@ -1,4 +1,7 @@
+import type { RentalStatus } from "@/lib/rental-status";
 import type { VehicleImages } from "@/lib/vehicle-images";
+
+export type { RentalStatus } from "@/lib/rental-status";
 
 export type CustomerInfo = {
   fullName: string;
@@ -22,6 +25,8 @@ export type RentalSession = {
   endDate: string;
   /** Kiralama kaydının oluşturulma zamanı (ISO 8601) */
   createdAt?: string;
+  /** İş akışı statüsü (yoksa aktif kabul edilir) */
+  status?: RentalStatus;
   customer: CustomerInfo;
   /** Kiralama başına en fazla bir müşteri yorumu */
   feedback?: { at: string; text: string };
@@ -38,6 +43,8 @@ export type Vehicle = {
   year: number;
   /** Bakımda — kiralanamaz */
   maintenance?: boolean;
+  /** ISO 3166-1 alpha-2 — ülke rengi için */
+  countryCode?: string;
   /** Açıdan görüntüler (data URL, demo saklama) */
   images?: VehicleImages;
 };
@@ -66,6 +73,7 @@ export const seedSessions: RentalSession[] = [
       passportNo: "U12345678",
       phone: "+90 532 111 2233",
     },
+    status: "active",
     feedback: { at: "2026-04-06T10:00:00.000Z", text: "Araç temiz teslim edildi, yakıt tam doluydu." },
     photos: [
       { id: "p1", url: "https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400&q=80", caption: "Teslim öncesi" },
@@ -85,6 +93,7 @@ export const seedSessions: RentalSession[] = [
       passportNo: "U87654321",
       phone: "+90 533 444 5566",
     },
+    status: "completed",
     feedback: { at: "2026-04-04T09:00:00.000Z", text: "Genel olarak memnun kaldık." },
     photos: [],
     accidentReports: [
@@ -114,7 +123,24 @@ export const seedSessions: RentalSession[] = [
       passportNo: "P11223344",
       phone: "+90 534 777 8899",
     },
+    status: "pending",
     photos: [{ id: "p3", url: "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=400&q=80" }],
+    accidentReports: [],
+  },
+  {
+    id: "s4",
+    vehicleId: "v5",
+    startDate: "2026-04-20",
+    endDate: "2026-04-25",
+    createdAt: "2026-04-01T12:00:00.000Z",
+    status: "cancelled",
+    customer: {
+      fullName: "Demo İptal",
+      nationalId: "55566677788",
+      passportNo: "P99887766",
+      phone: "+90 500 000 0000",
+    },
+    photos: [],
     accidentReports: [],
   },
 ];

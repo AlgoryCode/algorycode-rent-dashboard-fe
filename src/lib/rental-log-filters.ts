@@ -1,6 +1,7 @@
 import { format, parseISO } from "date-fns";
 
 import type { RentalSession } from "@/lib/mock-fleet";
+import type { RentalStatus } from "@/lib/rental-status";
 import { sessionCreatedAt } from "@/lib/rental-metadata";
 
 export type RentalLogFilterValues = {
@@ -9,12 +10,15 @@ export type RentalLogFilterValues = {
   anchorDate: string;
   /** Sadece global log sayfası — plaka parçası */
   vehicleQuery?: string;
+  /** Kiralama statüsü; all = filtre yok */
+  status: "all" | RentalStatus;
 };
 
 export const emptyRentalLogFilters = (): RentalLogFilterValues => ({
   customerQuery: "",
   anchorDate: "",
   vehicleQuery: "",
+  status: "all",
 });
 
 /** Müşteri metni + isteğe bağlı gün: kayıt o gün veya kiralama dönemi o günü kapsar. */
@@ -35,6 +39,9 @@ export function filterRentalLogSessions(sessions: RentalSession[], f: RentalLogF
       const inRentalPeriod = d >= s.startDate && d <= s.endDate;
       return inRentalPeriod || createdDay === d;
     });
+  }
+  if (f.status !== "all") {
+    out = out.filter((s) => (s.status ?? "active") === f.status);
   }
   return out;
 }

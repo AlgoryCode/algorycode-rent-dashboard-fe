@@ -1,5 +1,13 @@
-import { eachDayOfInterval, format, isWithinInterval, parseISO, startOfDay } from "date-fns";
+import {
+  differenceInCalendarDays,
+  eachDayOfInterval,
+  format,
+  isWithinInterval,
+  parseISO,
+  startOfDay,
+} from "date-fns";
 import type { RentalSession, Vehicle } from "@/lib/mock-fleet";
+import { normalizeRentalStatus, rentalCountsForCalendar } from "@/lib/rental-status";
 
 /** Eski kayıtlarda `feedback` dizi olabilir; tek yoruma indirger. */
 function normalizeRentalFeedback(raw: unknown): { at: string; text: string } | undefined {
@@ -18,7 +26,8 @@ function normalizeRentalFeedback(raw: unknown): { at: string; text: string } | u
 
 export function normalizeRentalSession(s: RentalSession): RentalSession {
   const fb = normalizeRentalFeedback((s as { feedback?: unknown }).feedback);
-  const next = { ...s, feedback: fb } as RentalSession;
+  const status = normalizeRentalStatus((s as { status?: unknown }).status);
+  const next = { ...s, feedback: fb, status } as RentalSession;
   if (fb === undefined) delete (next as { feedback?: unknown }).feedback;
   return next;
 }
@@ -111,7 +120,7 @@ function sessionDays(s: RentalSession): Date[] {
 export function bookedDatesForVehicle(sessions: RentalSession[], vehicleId: string): Date[] {
   const set = new Map<number, Date>();
   for (const s of sessions) {
-    if (s.vehicleId !== vehicleId) continue;
+    if (s.vehicleId !== vehicleId || !rentalCountsForCalendar(s)) continue;
     for (const d of sessionDays(s)) {
       set.set(d.getTime(), d);
     }
@@ -121,11 +130,26 @@ export function bookedDatesForVehicle(sessions: RentalSession[], vehicleId: stri
 
 export function isDateBooked(sessions: RentalSession[], vehicleId: string, day: Date): boolean {
   return sessions.some((s) => {
-    if (s.vehicleId !== vehicleId) return false;
+    if (s.vehicleId !== vehicleId || !rentalCountsForCalendar(s)) return false;
     const start = startOfDay(parseISO(s.startDate));
     const end = startOfDay(parseISO(s.endDate));
     return isWithinInterval(startOfDay(day), { start, end });
   });
+}
+
+/** Belirtilen günde devam eden kiralamalar (iptal hariç); süre uçlar dahil gün sayısı. */
+export function rentalsActiveOnDay(sessions: RentalSession[], day: Date): { session: RentalSession; durationDays: number }[] {
+  const d = startOfDay(day).getTime();
+  const out: { session: RentalSession; durationDays: number }[] = [];
+  for (const s of sessions) {
+    if (!rentalCountsForCalendar(s)) continue;
+    const start = startOfDay(parseISO(s.startDate)).getTime();
+    const end = startOfDay(parseISO(s.endDate)).getTime();
+    if (d < start || d > end) continue;
+    const durationDays = differenceInCalendarDays(parseISO(s.endDate), parseISO(s.startDate)) + 1;
+    out.push({ session: s, durationDays });
+  }
+  return out.sort((a, b) => a.session.startDate.localeCompare(b.session.startDate));
 }
 
 export type FleetStatus = "available" | "rented" | "maintenance";
@@ -135,6 +159,7 @@ export function vehicleFleetStatus(v: Vehicle, sessions: RentalSession[], on: Da
   const day = startOfDay(on);
   const active = sessions.some(
     (s) =>
+      rentalCountsForCalendar(s) &&
       s.vehicleId === v.id &&
       isWithinInterval(day, { start: startOfDay(parseISO(s.startDate)), end: startOfDay(parseISO(s.endDate)) }),
   );

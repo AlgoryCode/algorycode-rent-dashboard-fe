@@ -1,20 +1,22 @@
-const trimTrailingSlash = (s: string) => s.replace(/\/$/, "");
+export const AUTH_BASE =
+  process.env.AUTH_BASE ||
+  process.env.NEXT_PUBLIC_AUTH_BASE ||
+  "https://auth.algorycode.com";
 
-const PROD_GATEWAY_DEFAULT = "https://gateway.algorycode.com";
-
-/** Env yoksa canlı gateway. Yerel Auth için `NEXT_PUBLIC_GATEWAY_BASE` veya `npm run dev:local`. */
-function resolveGatewayBase(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_GATEWAY_BASE || process.env.GATEWAY_BASE;
-  if (fromEnv) return trimTrailingSlash(fromEnv);
-  return PROD_GATEWAY_DEFAULT;
-}
-
-/** AuthService’e giden upstream (gateway `/authservice` veya doğrudan AUTH_UPSTREAM). */
-export function getAuthUpstreamUrl(): string {
-  const direct = process.env.AUTH_UPSTREAM || process.env.NEXT_PUBLIC_AUTH_UPSTREAM;
-  if (direct) return trimTrailingSlash(direct);
-  return `${resolveGatewayBase()}/authservice`;
-}
+/**
+ * Rent API kök URL (sonunda / yok). Tüm filo/kiralama/ödeme/kullanıcı istekleri buraya gider.
+ *
+ * - `next dev`: env boşsa otomatik `http://localhost:8090`
+ * - Prod (`next build` / platform): `NEXT_PUBLIC_RENT_API_BASE` veya `.env.production` ile tek değişken
+ *
+ * Şablon: `.env.local.example` → `.env.local` (lokal), canlıda hosting env veya `.env.production`.
+ */
+export const RENT_API_BASE = (() => {
+  const v = process.env.NEXT_PUBLIC_RENT_API_BASE?.trim();
+  if (v) return v.replace(/\/$/, "");
+  if (process.env.NODE_ENV === "development") return "http://localhost:8090";
+  return "";
+})();
 
 export const COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 export const ACCESS_TOKEN_EXPIRY_MS = 300_000;

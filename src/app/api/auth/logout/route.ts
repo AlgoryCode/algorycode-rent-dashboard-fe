@@ -1,21 +1,26 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+
+import { AUTH_BASE } from "@/lib/config";
+import { clearAuthCookies } from "@/lib/server/auth-cookies";
 
 export async function POST() {
-  const response = NextResponse.json({ ok: true });
+  try {
+    const cookieStore = await cookies();
+    const refreshToken =
+      cookieStore.get("algory_refresh_token")?.value || cookieStore.get("refreshToken")?.value;
+    if (refreshToken) {
+      await fetch(`${AUTH_BASE}/basicauth/logout`, {
+        method: "POST",
+        headers: { Cookie: `refresh_token=${refreshToken}; refreshToken=${refreshToken}` },
+        cache: "no-store",
+      }).catch(() => undefined);
+    }
+  } catch {
+    // Best-effort revoke; cookie clear still logs user out locally.
+  }
 
-  const clearCookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax" as const,
-    path: "/",
-    maxAge: 0,
-  };
-
-  response.cookies.set("algory_access_token", "", clearCookieOptions);
-  response.cookies.set("algory_refresh_token", "", clearCookieOptions);
-  response.cookies.set("accessToken", "", clearCookieOptions);
-  response.cookies.set("refreshToken", "", clearCookieOptions);
-  response.cookies.set("algory_2fa_pending", "", clearCookieOptions);
-
+  const response = NextResponse.json({ success: true }, { status: 200 });
+  clearAuthCookies(response);
   return response;
 }

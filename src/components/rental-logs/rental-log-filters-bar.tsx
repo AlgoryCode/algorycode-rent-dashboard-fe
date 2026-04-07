@@ -3,8 +3,10 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { RentalLogFilterValues } from "@/lib/rental-log-filters";
 import { emptyRentalLogFilters } from "@/lib/rental-log-filters";
+import { RENTAL_STATUS_LABEL, type RentalStatus } from "@/lib/rental-status";
 
 type Props = {
   values: RentalLogFilterValues;
@@ -18,7 +20,7 @@ export function RentalLogFiltersBar({ values, onChange, showVehicleQuery }: Prop
 
   return (
     <div className="space-y-4 border-b border-border/60 pb-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-4">
         <div className="space-y-1.5">
           <Label htmlFor="rlf-customer" className="text-xs">
             Müşteri ara
@@ -60,6 +62,29 @@ export function RentalLogFiltersBar({ values, onChange, showVehicleQuery }: Prop
             />
           </div>
         )}
+        <div className="space-y-1.5">
+          <Label htmlFor="rlf-status" className="text-xs">
+            Statü
+          </Label>
+          <Select
+            value={values.status}
+            onValueChange={(v) => onChange({ ...values, status: v as "all" | RentalStatus })}
+          >
+            <SelectTrigger id="rlf-status" className="h-9 text-xs font-normal">
+              <SelectValue placeholder="Statü seçin" />
+            </SelectTrigger>
+            <SelectContent align="start">
+              <SelectItem value="all" className="text-xs">
+                Tümü
+              </SelectItem>
+              {(Object.keys(RENTAL_STATUS_LABEL) as RentalStatus[]).map((k) => (
+                <SelectItem key={k} value={k} className="text-xs">
+                  {RENTAL_STATUS_LABEL[k]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={clear}>
         Filtreleri temizle

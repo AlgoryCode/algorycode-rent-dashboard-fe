@@ -5,10 +5,31 @@ import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
 import { AlertTriangle, ChevronDown, ImageIcon, MessageSquare } from "lucide-react";
 
+import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { RentalSession } from "@/lib/mock-fleet";
 import { sessionCreatedAt } from "@/lib/rental-metadata";
+import { RENTAL_STATUS_LABEL, type RentalStatus } from "@/lib/rental-status";
+
+function sessionStatus(s: RentalSession): RentalStatus {
+  return s.status ?? "active";
+}
+
+function statusBadgeVariant(st: RentalStatus): "success" | "warning" | "muted" | "destructive" {
+  switch (st) {
+    case "active":
+      return "success";
+    case "pending":
+      return "warning";
+    case "completed":
+      return "muted";
+    case "cancelled":
+      return "destructive";
+    default:
+      return "muted";
+  }
+}
 
 type Props = {
   sessions: RentalSession[];
@@ -33,9 +54,14 @@ function SessionSummary({
         <p className="text-[11px] font-medium text-muted-foreground">
           {format(parseISO(sessionCreatedAt(s)), "d MMMM yyyy, HH:mm", { locale: tr })}
         </p>
-        <p className="text-sm font-medium">
-          Kiralama oluşturuldu · <span className="text-foreground">{s.customer.fullName}</span>
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="text-sm font-medium">
+            Kiralama oluşturuldu · <span className="text-foreground">{s.customer.fullName}</span>
+          </p>
+          <Badge variant={statusBadgeVariant(sessionStatus(s))} className="text-[10px]">
+            {RENTAL_STATUS_LABEL[sessionStatus(s)]}
+          </Badge>
+        </div>
         {plateOf && (
           <p className="text-xs">
             <Link

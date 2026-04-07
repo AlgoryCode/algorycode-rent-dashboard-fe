@@ -1,51 +1,50 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Vehicle } from "@/lib/mock-fleet";
-import { seedVehicles } from "@/lib/mock-fleet";
 import {
-  getExtraVehiclesSnapshot,
-  invalidateExtraVehiclesCache,
-  mergeVehicleLists,
-  saveExtraVehicles,
-  VEHICLES_STORAGE_KEY,
-} from "@/lib/fleet-utils";
-
-const listeners = new Set<() => void>();
-
-function subscribe(onChange: () => void) {
-  listeners.add(onChange);
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === VEHICLES_STORAGE_KEY) {
-      invalidateExtraVehiclesCache();
-      onChange();
-    }
-  };
-  if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
-  return () => {
-    listeners.delete(onChange);
-    if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
-  };
-}
-
-function emit() {
-  listeners.forEach((l) => l());
-}
+  createVehicleOnRentApi,
+  fetchVehiclesFromRentApi,
+  getRentApiErrorMessage,
+  type CreateVehiclePayload,
+} from "@/lib/rent-api";
 
 export function useFleetVehicles() {
-  const extra = useSyncExternalStore(
-    subscribe,
-    () => getExtraVehiclesSnapshot(),
-    () => [] as Vehicle[],
-  );
+  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const allVehicles = useMemo(() => mergeVehicleLists(seedVehicles, extra), [extra]);
-
-  const addVehicle = useCallback((vehicle: Vehicle) => {
-    const next = [...getExtraVehiclesSnapshot(), vehicle];
-    saveExtraVehicles(next);
-    emit();
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await fetchVehiclesFromRentApi();
+      setVehicles(list);
+    } catch (e) {
+      setError(getRentApiErrorMessage(e));
+      setVehicles([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { allVehicles, addVehicle, ready: true };
+  useEffect(() => {
+    void refetch();
+  }, [refetch]);
+
+  const addVehicle = useCallback(
+    async (payload: CreateVehiclePayload) => {
+      const created = await createVehicleOnRentApi(payload);
+      setVehicles((prev) => {
+        const rest = prev.filter((v) => v.id !== created.id);
+        return [created, ...rest];
+      });
+      return created;
+    },
+    [],
+  );
+
+  const allVehicles = useMemo(() => vehicles, [vehicles]);
+
+  return { allVehicles, addVehicle, ready: !loading, error, refetch };
 }

@@ -3,25 +3,51 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
-import { CalendarDays, Car, CarFront, LayoutDashboard, LogOut, Menu, Users, X } from "lucide-react";
+import {
+  Calendar,
+  CalendarDays,
+  Car,
+  CarFront,
+  Globe2,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Settings,
+  UserCog,
+  Users,
+  Wallet,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetClose, SheetContent } from "@/components/ui/sheet";
+import { ApiError } from "@/lib/api/errors";
+import { authService } from "@/lib/auth-service";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/dashboard", label: "Özet", icon: LayoutDashboard },
   { href: "/vehicles", label: "Araçlar", icon: Car },
+  { href: "/countries", label: "Ülkeler", icon: Globe2 },
   { href: "/logs", label: "Kiralamalar", icon: CalendarDays },
+  { href: "/calendar", label: "Takvim", icon: Calendar },
+  { href: "/payments", label: "Ödemeler", icon: Wallet },
+  { href: "/users", label: "Kullanıcılar", icon: UserCog },
   { href: "/customers", label: "Customers", icon: Users },
+  { href: "/settings", label: "Ayarlar", icon: Settings },
 ] as const;
 
 function isNavActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
   if (href === "/vehicles") return pathname === "/vehicles" || pathname.startsWith("/vehicles/");
+  if (href === "/countries") return pathname === "/countries" || pathname.startsWith("/countries/");
   if (href === "/customers") return pathname === "/customers" || pathname.startsWith("/customers/");
   if (href === "/logs") return pathname === "/logs" || pathname.startsWith("/logs/");
+  if (href === "/calendar") return pathname === "/calendar" || pathname.startsWith("/calendar/");
+  if (href === "/payments") return pathname === "/payments" || pathname.startsWith("/payments/");
+  if (href === "/users") return pathname === "/users" || pathname.startsWith("/users/");
+  if (href === "/settings") return pathname === "/settings" || pathname.startsWith("/settings/");
   return false;
 }
 
@@ -32,13 +58,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+      await authService.logout();
       toast.success("Çıkış yapıldı");
       setMobileNavOpen(false);
       router.push("/login");
       router.refresh();
-    } catch {
-      toast.error("Çıkış sırasında hata");
+    } catch (err) {
+      const message = err instanceof ApiError ? err.message : "Çıkış sırasında hata";
+      toast.error(message);
     }
   };
 

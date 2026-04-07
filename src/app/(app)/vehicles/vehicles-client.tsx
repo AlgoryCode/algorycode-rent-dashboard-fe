@@ -20,11 +20,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCountries } from "@/hooks/use-countries";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
 import { useFleetVehicles } from "@/hooks/use-fleet-vehicles";
 import { vehicleFleetStatus, type FleetStatus } from "@/lib/fleet-utils";
-import type { Vehicle } from "@/lib/mock-fleet";
+import { getRentApiErrorMessage } from "@/lib/rent-api";
 import { compactVehicleImages, type VehicleImages } from "@/lib/vehicle-images";
 import { VehicleImageSlotsEditor } from "@/components/vehicles/vehicle-image-slots-editor";
 
@@ -45,10 +47,13 @@ function statusBadge(status: FleetStatus) {
   }
 }
 
+const COUNTRY_NONE = "__none__";
+
 export function VehiclesClient() {
   const router = useRouter();
-  const { allVehicles, addVehicle, ready } = useFleetVehicles();
+  const { allVehicles, addVehicle, ready, error: fleetError } = useFleetVehicles();
   const { allSessions } = useFleetSessions();
+  const { countries, countryByCode } = useCountries();
   const [tab, setTab] = useState<"all" | FleetStatus>("all");
   const [query, setQuery] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -57,9 +62,15 @@ export function VehiclesClient() {
   const [model, setModel] = useState("");
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [maintenance, setMaintenance] = useState(false);
+  const [vehicleCountry, setVehicleCountry] = useState<string>(COUNTRY_NONE);
   const [draftImages, setDraftImages] = useState<VehicleImages>({});
 
   const today = startOfDay(new Date());
+
+  const countriesSorted = useMemo(
+    () => [...countries].sort((a, b) => a.name.localeCompare(b.name, "tr")),
+    [countries],
+  );
 
   const rows = useMemo(() => {
     return allVehicles.map((v) => {
@@ -91,10 +102,11 @@ export function VehiclesClient() {
     setModel("");
     setYear(String(new Date().getFullYear()));
     setMaintenance(false);
+    setVehicleCountry(COUNTRY_NONE);
     setDraftImages({});
   };
 
-  const submitNewVehicle = () => {
+  const submitNewVehicle = async () => {
     const p = normalizePlate(plate);
     const b = brand.trim();
     const m = model.trim();
@@ -108,21 +120,23 @@ export function VehiclesClient() {
       toast.error("Bu plaka zaten kayıtlı.");
       return;
     }
-    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `ev-${Date.now()}`;
     const images = compactVehicleImages(draftImages);
-    const vehicle: Vehicle = {
-      id,
-      plate: p,
-      brand: b,
-      model: m,
-      year: y,
-      maintenance: maintenance || undefined,
-      images,
-    };
-    addVehicle(vehicle);
-    toast.success("Araç eklendi");
-    setDialogOpen(false);
-    resetForm();
+    try {
+      await addVehicle({
+        plate: p,
+        brand: b,
+        model: m,
+        year: y,
+        maintenance: Boolean(maintenance),
+        countryCode: vehicleCountry !== COUNTRY_NONE ? vehicleCountry : undefined,
+        images: images ?? undefined,
+      });
+      toast.success("Araç kaydedildi");
+      setDialogOpen(false);
+      resetForm();
+    } catch (e) {
+      toast.error(getRentApiErrorMessage(e));
+    }
   };
 
   return (
@@ -172,7 +186,11 @@ export function VehiclesClient() {
         <CardHeader className="py-3">
           <CardTitle className="text-sm">Filo listesi</CardTitle>
           <CardDescription>
-            {!ready ? "Yükleniyor…" : `${filtered.length} araç gösteriliyor (${allVehicles.length} toplam)`}
+            {!ready
+              ? "Yükleniyor…"
+              : fleetError
+                ? `Liste yüklenemedi: ${fleetError}`
+                : `${filtered.length} araç gösteriliyor (${allVehicles.length} toplam)`}
           </CardDescription>
         </CardHeader>
         <CardContent className="px-2 pb-3 sm:px-4">
@@ -183,13 +201,18 @@ export function VehiclesClient() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="h-9 w-[110px] text-xs">Plaka</TableHead>
+                  <TableHead className="h-9 w-[88px] text-xs">Ülke</TableHead>
                   <TableHead className="h-9 text-xs">Araç</TableHead>
                   <TableHead className="h-9 w-[64px] text-xs">Yıl</TableHead>
                   <TableHead className="h-9 w-[100px] text-xs">Durum</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(({ v, status }) => (
+                {filtered.map(({ v, status }) => {
+                  const cc = v.countryCode?.toUpperCase();
+                  const countryMeta = cc ? countryByCode.get(cc) : undefined;
+                  const rowAccent = countryMeta?.colorCode ?? (cc ? "#94a3b8" : undefined);
+                  return (
                   <TableRow
                     key={v.id}
                     role="link"
@@ -206,13 +229,29 @@ export function VehiclesClient() {
                   >
                     <TableCell className="py-2 font-mono text-xs font-medium">{v.plate}</TableCell>
                     <TableCell className="py-2">
+                      {cc ? (
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-5 w-5 shrink-0 rounded border border-border/60"
+                            style={{ backgroundColor: rowAccent }}
+                            title={countryMeta ? `${countryMeta.name} (${cc})` : `Bilinmeyen ülke: ${cc}`}
+                            aria-hidden
+                          />
+                          <span className="font-mono text-xs text-muted-foreground">{cc}</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="py-2">
                       <span className="font-medium">{v.brand}</span>{" "}
                       <span className="text-muted-foreground">{v.model}</span>
                     </TableCell>
                     <TableCell className="py-2 text-xs text-muted-foreground">{v.year}</TableCell>
                     <TableCell className="py-2">{statusBadge(status)}</TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           )}
@@ -260,6 +299,29 @@ export function VehiclesClient() {
                   value={year}
                   onChange={(e) => setYear(e.target.value)}
                 />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="nv-country">Ülke</Label>
+                <Select value={vehicleCountry} onValueChange={setVehicleCountry}>
+                  <SelectTrigger id="nv-country" className="w-full">
+                    <SelectValue placeholder="İsteğe bağlı" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={COUNTRY_NONE}>Atanmadı</SelectItem>
+                    {countriesSorted.map((c) => (
+                      <SelectItem key={c.id} value={c.code}>
+                        <span className="flex items-center gap-2">
+                          <span
+                            className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-border/60"
+                            style={{ backgroundColor: c.colorCode }}
+                            aria-hidden
+                          />
+                          {c.name} ({c.code})
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <label className="flex cursor-pointer items-center gap-2 text-xs">
                 <input type="checkbox" checked={maintenance} onChange={(e) => setMaintenance(e.target.checked)} className="rounded border-input" />

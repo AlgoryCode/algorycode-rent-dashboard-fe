@@ -30,3 +30,17 @@ export function getExpFromAccessToken(token?: string | null): number | null {
   if (exp >= 1e12) return Math.floor(exp / 1000);
   return exp;
 }
+
+/** AuthService JWT claim `userId`. */
+export function getUserIdFromAccessToken(token?: string | null): number | null {
+  if (!token) return null;
+  const payload = parseJwtPayload(token);
+  if (!payload) return null;
+  const raw = payload.userId;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") {
+    const n = parseInt(raw, 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}

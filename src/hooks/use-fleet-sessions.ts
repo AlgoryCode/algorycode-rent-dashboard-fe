@@ -1,56 +1,47 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RentalSession } from "@/lib/mock-fleet";
-import { seedSessions } from "@/lib/mock-fleet";
 import {
-  getExtraSessionsSnapshot,
-  invalidateExtraSessionsCache,
-  mergeSessions,
-  saveExtraSessions,
-} from "@/lib/fleet-utils";
-
-const EXTRA_STORAGE_KEY = "rent-fe-extra-sessions";
-
-const listeners = new Set<() => void>();
-
-function subscribe(onChange: () => void) {
-  listeners.add(onChange);
-  const onStorage = (e: StorageEvent) => {
-    if (e.key === EXTRA_STORAGE_KEY) {
-      invalidateExtraSessionsCache();
-      onChange();
-    }
-  };
-  if (typeof window !== "undefined") window.addEventListener("storage", onStorage);
-  return () => {
-    listeners.delete(onChange);
-    if (typeof window !== "undefined") window.removeEventListener("storage", onStorage);
-  };
-}
-
-function emit() {
-  listeners.forEach((l) => l());
-}
-
-function getSnapshot() {
-  return getExtraSessionsSnapshot();
-}
-
-function getServerSnapshot() {
-  return [] as RentalSession[];
-}
+  createRentalOnRentApi,
+  fetchRentalsFromRentApi,
+  getRentApiErrorMessage,
+  type CreateRentalPayload,
+} from "@/lib/rent-api";
 
 export function useFleetSessions() {
-  const extra = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [sessions, setSessions] = useState<RentalSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const allSessions = useMemo(() => mergeSessions(seedSessions, extra), [extra]);
-
-  const addSession = useCallback((session: RentalSession) => {
-    const next = [...getExtraSessionsSnapshot(), session];
-    saveExtraSessions(next);
-    emit();
+  const refetch = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const list = await fetchRentalsFromRentApi();
+      setSessions(list);
+    } catch (e) {
+      setError(getRentApiErrorMessage(e));
+      setSessions([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  return { allSessions, addSession, ready: true };
+  useEffect(() => {
+    void refetch();
+  }, [refetch]);
+
+  const createRental = useCallback(async (payload: CreateRentalPayload) => {
+    const created = await createRentalOnRentApi(payload);
+    setSessions((prev) => {
+      const rest = prev.filter((s) => s.id !== created.id);
+      return [created, ...rest];
+    });
+    return created;
+  }, []);
+
+  const allSessions = useMemo(() => sessions, [sessions]);
+
+  return { allSessions, createRental, ready: !loading, error, refetch };
 }

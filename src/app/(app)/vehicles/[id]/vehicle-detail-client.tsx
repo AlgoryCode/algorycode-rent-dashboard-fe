@@ -9,7 +9,7 @@ import { ArrowLeft, CalendarDays, ChevronDown, ScrollText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { VehicleImageGallery } from "@/components/vehicles/vehicle-image-gallery";
+import { VehicleDetailListingGallery } from "@/components/vehicles/vehicle-detail-listing-gallery";
 import { RentAvailabilityCalendar } from "@/components/rent-calendar/rent-availability-calendar";
 import { RentCalendarLegend } from "@/components/rent-calendar/rent-calendar-legend";
 import { RentalLogEntries } from "@/components/rental-logs/rental-log-entries";
@@ -25,7 +25,9 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useCountries } from "@/hooks/use-countries";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
+import { getRentApiErrorMessage } from "@/lib/rent-api";
 import {
   bookedDatesForVehicle,
   dateRangesOverlap,
@@ -41,7 +43,8 @@ import {
 } from "@/lib/rental-log-filters";
 import type { RentalSession, Vehicle } from "@/lib/mock-fleet";
 import { sessionCreatedAt } from "@/lib/rental-metadata";
-import { hasVehicleGalleryImages } from "@/lib/vehicle-images";
+import { mergeVehicleImagesWithDemo } from "@/lib/vehicle-images";
+import { rentalCountsForCalendar } from "@/lib/rental-status";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -49,8 +52,13 @@ type Props = {
 };
 
 export function VehicleDetailClient({ vehicle }: Props) {
-  const { allSessions, addSession } = useFleetSessions();
+  const { allSessions, createRental } = useFleetSessions();
+  const { countryByCode } = useCountries();
   const today = useMemo(() => new Date(), []);
+  const countryMeta = useMemo(() => {
+    const cc = vehicle.countryCode?.toUpperCase();
+    return cc ? countryByCode.get(cc) : undefined;
+  }, [vehicle.countryCode, countryByCode]);
   const status = vehicleFleetStatus(vehicle, allSessions, today);
   const booked = useMemo(() => bookedDatesForVehicle(allSessions, vehicle.id), [allSessions, vehicle.id]);
   const sessions = useMemo(() => sessionsForVehicle(allSessions, vehicle.id), [allSessions, vehicle.id]);
@@ -73,6 +81,8 @@ export function VehicleDetailClient({ vehicle }: Props) {
     return sortSessionsByLogTimeDesc(filterRentalLogSessions(rentalLogs, logFilters));
   }, [rentalLogs, logFilters]);
 
+  const galleryImages = useMemo(() => mergeVehicleImagesWithDemo(vehicle.images, vehicle.id), [vehicle.images, vehicle.id]);
+
   const openForDay = (day: Date) => {
     if (vehicle.maintenance) {
       toast.error("Bu araç bakımda; kiralama oluşturulamaz.");
@@ -93,7 +103,7 @@ export function VehicleDetailClient({ vehicle }: Props) {
     openForDay(date);
   };
 
-  const submitRental = () => {
+  const submitRental = async () => {
     const start = pickStart.trim();
     const end = pickEnd.trim();
     if (!fullName.trim() || !nationalId.trim() || !passportNo.trim() || !phone.trim()) {
@@ -106,34 +116,36 @@ export function VehicleDetailClient({ vehicle }: Props) {
     }
     const clash = allSessions.some(
       (s) =>
-        s.vehicleId === vehicle.id && dateRangesOverlap(start, end, s.startDate, s.endDate),
+        rentalCountsForCalendar(s) &&
+        s.vehicleId === vehicle.id &&
+        dateRangesOverlap(start, end, s.startDate, s.endDate),
     );
     if (clash) {
       toast.error("Seçilen aralıkta başka bir kiralama var.");
       return;
     }
-    const session: RentalSession = {
-      id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `r-${Date.now()}`,
-      vehicleId: vehicle.id,
-      startDate: start,
-      endDate: end,
-      createdAt: new Date().toISOString(),
-      customer: {
-        fullName: fullName.trim(),
-        nationalId: nationalId.trim(),
-        passportNo: passportNo.trim(),
-        phone: phone.trim(),
-      },
-      photos: [],
-      accidentReports: [],
-    };
-    addSession(session);
-    toast.success("Kiralama kaydı oluşturuldu (demo, tarayıcıda saklanıyor).");
-    setDialogOpen(false);
-    setFullName("");
-    setNationalId("");
-    setPassportNo("");
-    setPhone("");
+    try {
+      await createRental({
+        vehicleId: vehicle.id,
+        startDate: start,
+        endDate: end,
+        customer: {
+          fullName: fullName.trim(),
+          nationalId: nationalId.trim(),
+          passportNo: passportNo.trim(),
+          phone: phone.trim(),
+        },
+        status: "active",
+      });
+      toast.success("Kiralama kaydı oluşturuldu.");
+      setDialogOpen(false);
+      setFullName("");
+      setNationalId("");
+      setPassportNo("");
+      setPhone("");
+    } catch (e) {
+      toast.error(getRentApiErrorMessage(e));
+    }
   };
 
   return (
@@ -160,48 +172,79 @@ export function VehicleDetailClient({ vehicle }: Props) {
         )}
       </div>
 
-      <Card className="glow-card">
-        <CardHeader className="py-3 pb-2">
-          <CardTitle className="text-sm">Araç bilgileri</CardTitle>
-          <CardDescription className="text-xs">Plaka, marka, model ve filo durumu.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Plaka</p>
-            <p className="font-mono text-sm font-semibold">{vehicle.plate}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Marka</p>
-            <p className="text-sm font-medium">{vehicle.brand}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Model</p>
-            <p className="text-sm font-medium">{vehicle.model}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Model yılı</p>
-            <p className="text-sm font-medium tabular-nums">{vehicle.year}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Araç kayıt no</p>
-            <p className="font-mono text-xs text-muted-foreground">{vehicle.id}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Bakım</p>
-            <p className="text-sm font-medium">{vehicle.maintenance ? "Evet — kiralanamaz" : "Hayır"}</p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Bugünkü durum</p>
-            <p className="text-sm font-medium">
-              {status === "maintenance" ? "Bakımda" : status === "rented" ? "Kirada" : "Müsait"}
-            </p>
-          </div>
-          <div className="space-y-1">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Toplam kiralama</p>
-            <p className="text-sm font-medium tabular-nums">{sessions.length} kayıt</p>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start lg:gap-6">
+        <Card className="glow-card order-1 min-w-0 overflow-hidden">
+          <CardHeader className="pb-2 pt-3 sm:pt-4">
+            <CardTitle className="text-sm">Görseller</CardTitle>
+            <CardDescription className="text-xs">
+              İlan görünümü: ortada ana fotoğraf, altta diğer açılar. Küçük resme tıklayarak ana görseli değiştirin.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pb-4 pt-0">
+            <VehicleDetailListingGallery key={vehicle.id} images={galleryImages} />
+          </CardContent>
+        </Card>
+
+        <Card className="glow-card order-2 min-w-0">
+          <CardHeader className="py-3 pb-2">
+            <CardTitle className="text-sm">Araç bilgileri</CardTitle>
+            <CardDescription className="text-xs">Plaka, marka, model ve filo durumu.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Plaka</p>
+              <p className="font-mono text-sm font-semibold">{vehicle.plate}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Marka</p>
+              <p className="text-sm font-medium">{vehicle.brand}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Model</p>
+              <p className="text-sm font-medium">{vehicle.model}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Model yılı</p>
+              <p className="text-sm font-medium tabular-nums">{vehicle.year}</p>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Ülke</p>
+              <p className="text-sm font-medium">
+                {countryMeta ? (
+                  <span className="inline-flex items-center gap-2">
+                    <span
+                      className="inline-block h-2.5 w-2.5 shrink-0 rounded-sm border border-border/60"
+                      style={{ backgroundColor: countryMeta.colorCode }}
+                      aria-hidden
+                    />
+                    {countryMeta.name} ({countryMeta.code})
+                  </span>
+                ) : (
+                  "—"
+                )}
+              </p>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Araç kayıt no</p>
+              <p className="font-mono text-xs text-muted-foreground">{vehicle.id}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Bakım</p>
+              <p className="text-sm font-medium">{vehicle.maintenance ? "Evet — kiralanamaz" : "Hayır"}</p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Bugünkü durum</p>
+              <p className="text-sm font-medium">
+                {status === "maintenance" ? "Bakımda" : status === "rented" ? "Kirada" : "Müsait"}
+              </p>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Toplam kiralama</p>
+              <p className="text-sm font-medium tabular-nums">{sessions.length} kayıt</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card className="glow-card">
         <CardHeader className="py-3 sm:py-4">
@@ -239,18 +282,6 @@ export function VehicleDetailClient({ vehicle }: Props) {
           )}
         </CardContent>
       </Card>
-
-      {hasVehicleGalleryImages(vehicle.images) && (
-        <Card className="glow-card">
-          <CardHeader className="py-3 pb-2">
-            <CardTitle className="text-sm">Araç görselleri</CardTitle>
-            <CardDescription className="text-xs">Kayıt sırasında yüklenen açı fotoğrafları.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <VehicleImageGallery images={vehicle.images} />
-          </CardContent>
-        </Card>
-      )}
 
       <Collapsible open={logsOpen} onOpenChange={setLogsOpen}>
         <Card className="glow-card overflow-hidden">

@@ -8,8 +8,13 @@ function isProtectedPath(pathname: string) {
     pathname === "/" ||
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/vehicles") ||
+    pathname.startsWith("/countries") ||
     pathname.startsWith("/customers") ||
-    pathname.startsWith("/logs")
+    pathname.startsWith("/logs") ||
+    pathname.startsWith("/calendar") ||
+    pathname.startsWith("/payments") ||
+    pathname.startsWith("/users") ||
+    pathname.startsWith("/settings")
   );
 }
 
@@ -47,9 +52,19 @@ export const config = {
     "/dashboard/:path*",
     "/vehicles",
     "/vehicles/:path*",
+    "/countries",
+    "/countries/:path*",
     "/customers",
     "/customers/:path*",
     "/logs",
     "/logs/:path*",
+    "/calendar",
+    "/calendar/:path*",
+    "/payments",
+    "/payments/:path*",
+    "/users",
+    "/users/:path*",
+    "/settings",
+    "/settings/:path*",
   ],
 };
