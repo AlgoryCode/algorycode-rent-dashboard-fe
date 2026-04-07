@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+
+import { getExpFromAccessToken } from "@/lib/auth-user";
+import { postAuthServiceBasicLogin } from "@/lib/auth-upstream-login";
 import {
   COOKIE_MAX_AGE_SECONDS,
   TWO_FACTOR_PENDING_COOKIE_MAX_AGE_SECONDS,
-  getAuthUpstreamUrl,
 } from "@/lib/config";
-import { getExpFromAccessToken } from "@/lib/auth-user";
 
 type LoginBody = {
   email?: string;
@@ -14,17 +15,30 @@ type LoginBody = {
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as LoginBody;
-    const upstream = await fetch(`${getAuthUpstreamUrl()}/basicauth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      cache: "no-store",
-    });
+    const email = body.email?.trim() ?? "";
+    const password = body.password ?? "";
+    if (!email || !password) {
+      return NextResponse.json({ message: "E-posta ve şifre gerekli" }, { status: 400 });
+    }
 
-    const data = await upstream.json();
-    if (!upstream.ok) {
+    const upstream = await postAuthServiceBasicLogin({ email, password });
+    const data = upstream.data as Record<string, unknown> & {
+      message?: string;
+      requiresTwoFactor?: boolean;
+      twoFactorToken?: string;
+      userId?: number;
+      email?: string;
+      firstName?: string;
+      lastName?: string;
+      accessToken?: string;
+      access_token?: string;
+      refreshToken?: string;
+      refresh_token?: string;
+    };
+
+    if (upstream.status < 200 || upstream.status >= 300) {
       return NextResponse.json(
-        { message: data?.message || "Giriş başarısız" },
+        { message: typeof data?.message === "string" ? data.message : "Giriş başarısız" },
         { status: upstream.status || 401 },
       );
     }
@@ -53,14 +67,13 @@ export async function POST(req: Request) {
 
     const accessToken = data?.accessToken || data?.access_token;
     const refreshToken = data?.refreshToken || data?.refresh_token;
-    const accessTokenExpiresAt = getExpFromAccessToken(accessToken) ?? undefined;
+    const accessTokenExpiresAt = getExpFromAccessToken(
+      typeof accessToken === "string" ? accessToken : undefined,
+    ) ?? undefined;
 
-    const response = NextResponse.json(
-      { ...data, accessTokenExpiresAt },
-      { status: 200 },
-    );
+    const response = NextResponse.json({ ...data, accessTokenExpiresAt }, { status: 200 });
 
-    if (accessToken) {
+    if (accessToken && typeof accessToken === "string") {
       const accessCookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -72,7 +85,7 @@ export async function POST(req: Request) {
       response.cookies.set("accessToken", accessToken, accessCookieOptions);
     }
 
-    if (refreshToken) {
+    if (refreshToken && typeof refreshToken === "string") {
       const refreshCookieOptions = {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",

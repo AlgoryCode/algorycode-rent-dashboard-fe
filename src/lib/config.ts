@@ -2,14 +2,10 @@ const trimTrailingSlash = (s: string) => s.replace(/\/$/, "");
 
 const PROD_GATEWAY_DEFAULT = "https://gateway.algorycode.com";
 
-function isLocalDev(): boolean {
-  return process.env.NODE_ENV === "development";
-}
-
+/** Env yoksa canlı gateway. Yerel Auth için `NEXT_PUBLIC_GATEWAY_BASE` veya `npm run dev:local`. */
 function resolveGatewayBase(): string {
   const fromEnv = process.env.NEXT_PUBLIC_GATEWAY_BASE || process.env.GATEWAY_BASE;
   if (fromEnv) return trimTrailingSlash(fromEnv);
-  if (isLocalDev()) return "http://localhost:8072";
   return PROD_GATEWAY_DEFAULT;
 }
 
