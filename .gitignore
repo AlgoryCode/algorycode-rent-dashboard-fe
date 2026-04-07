@@ -30,8 +30,9 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env: yerel gizliler. `.env.production` repoda kalır (NEXT_PUBLIC_* build’e gömülür).
+.env
+.env*.local
 
 # vercel
 .vercel

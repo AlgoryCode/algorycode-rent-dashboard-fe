@@ -6,16 +6,19 @@ export const AUTH_BASE =
 /**
  * Rent API kök URL (sonunda / yok). Tüm filo/kiralama/ödeme/kullanıcı istekleri buraya gider.
  *
- * - `next dev`: env boşsa otomatik `http://localhost:8090`
- * - Prod (`next build` / platform): `NEXT_PUBLIC_RENT_API_BASE` veya `.env.production` ile tek değişken
+ * - `next dev`: env boşsa `http://localhost:8090`
+ * - Prod: önce `NEXT_PUBLIC_RENT_API_BASE` (hosting paneli veya `.env.production`); yoksa `https://rent-api.algorycode.com`
  *
- * Şablon: `.env.local.example` → `.env.local` (lokal), canlıda hosting env veya `.env.production`.
+ * Şablon: `.env.local.example` → `.env.local` (lokal). `.env.production` repoda (git’e ekleyin).
  */
+const PROD_RENT_API_DEFAULT = "https://rent-api.algorycode.com";
+
 export const RENT_API_BASE = (() => {
   const v = process.env.NEXT_PUBLIC_RENT_API_BASE?.trim();
   if (v) return v.replace(/\/$/, "");
   if (process.env.NODE_ENV === "development") return "http://localhost:8090";
-  return "";
+  // `next build` / hosting: env unutulursa (ör. .env.production deploy’a girmemiş) prod kökü
+  return PROD_RENT_API_DEFAULT;
 })();
 
 export const COOKIE_MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
