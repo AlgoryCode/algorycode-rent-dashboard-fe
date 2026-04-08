@@ -1,7 +1,7 @@
 import axios from "axios";
 
 import { RENT_API_BASE } from "@/lib/config";
-import type { RentalSession, Vehicle } from "@/lib/mock-fleet";
+import type { AdditionalDriverInfo, RentalSession, Vehicle } from "@/lib/mock-fleet";
 import type { PaymentLog, PaymentLogStatus } from "@/lib/mock-payments";
 import type { PanelUser, PanelUserRole } from "@/lib/mock-users";
 import { normalizeRentalStatus } from "@/lib/rental-status";
@@ -28,6 +28,9 @@ export type CreateVehiclePayload = {
   model: string;
   year: number;
   maintenance: boolean;
+  external?: boolean;
+  externalCompany?: string;
+  defaultCommissionAmount?: number;
   /** ISO 3166-1 alpha-2 */
   countryCode?: string;
   images?: Record<string, string>;
@@ -55,8 +58,108 @@ export type CreateRentalPayload = {
     nationalId: string;
     passportNo: string;
     phone: string;
+    email?: string;
+    birthDate?: string;
+    driverLicenseNo?: string;
+    driverLicenseImageDataUrl?: string;
+    passportImageDataUrl?: string;
   };
+  commissionAmount: number;
+  commissionFlow: "collect" | "pay";
+  commissionCompany?: string;
+  additionalDrivers?: {
+    fullName: string;
+    birthDate: string;
+    driverLicenseNo: string;
+    passportNo: string;
+    driverLicenseImageDataUrl: string;
+    passportImageDataUrl: string;
+  }[];
   status?: string;
+};
+
+export type UpdateRentalPayload = {
+  startDate?: string;
+  endDate?: string;
+  commissionAmount?: number;
+  commissionFlow?: "collect" | "pay";
+  commissionCompany?: string;
+  status?: "active" | "pending" | "completed" | "cancelled";
+  customer?: {
+    fullName?: string;
+    nationalId?: string;
+    passportNo?: string;
+    phone?: string;
+    email?: string;
+    birthDate?: string;
+    driverLicenseNo?: string;
+  };
+};
+
+export type RentalRequestStatus = "pending" | "approved" | "rejected";
+
+export type RentalRequestFormPayload = {
+  vehicleId?: string;
+  startDate: string;
+  endDate: string;
+  outsideCountryTravel: boolean;
+  note?: string;
+  customer: {
+    fullName: string;
+    phone: string;
+    email: string;
+    birthDate: string;
+    nationalId?: string;
+    passportNo: string;
+    driverLicenseNo: string;
+    passportImageDataUrl: string;
+    driverLicenseImageDataUrl: string;
+  };
+  additionalDrivers?: {
+    fullName: string;
+    birthDate: string;
+    driverLicenseNo: string;
+    passportNo: string;
+    passportImageDataUrl: string;
+    driverLicenseImageDataUrl: string;
+  }[];
+};
+
+export type RentalRequestDto = {
+  id: string;
+  referenceNo: string;
+  createdAt?: string;
+  status: RentalRequestStatus;
+  statusMessage?: string;
+  vehicleId?: string;
+  startDate: string;
+  endDate: string;
+  outsideCountryTravel: boolean;
+  greenInsuranceFee: number;
+  note?: string;
+  contractPdfPath?: string;
+  whatsappContractSentAt?: string;
+  whatsappContractError?: string;
+  customer: {
+    fullName: string;
+    phone: string;
+    email: string;
+    birthDate: string;
+    nationalId?: string;
+    passportNo: string;
+    driverLicenseNo: string;
+    passportImageDataUrl?: string;
+    driverLicenseImageDataUrl?: string;
+  };
+  additionalDrivers?: {
+    id?: string;
+    fullName: string;
+    birthDate: string;
+    driverLicenseNo: string;
+    passportNo: string;
+    passportImageDataUrl?: string;
+    driverLicenseImageDataUrl?: string;
+  }[];
 };
 
 export function getRentApiErrorMessage(err: unknown): string {
@@ -84,6 +187,18 @@ function mapVehicleImages(raw: unknown): Vehicle["images"] {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function asOptionalString(v: unknown): string | undefined {
+  if (v == null) return undefined;
+  const s = String(v).trim();
+  return s.length > 0 ? s : undefined;
+}
+
+function asOptionalNumber(v: unknown): number | undefined {
+  if (v == null) return undefined;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 export function mapVehicleFromApi(raw: Record<string, unknown>): Vehicle {
   const cc = raw.countryCode;
   return {
@@ -93,6 +208,9 @@ export function mapVehicleFromApi(raw: Record<string, unknown>): Vehicle {
     model: String(raw.model),
     year: Number(raw.year),
     maintenance: Boolean(raw.maintenance),
+    external: Boolean(raw.external),
+    externalCompany: asOptionalString(raw.externalCompany),
+    defaultCommissionAmount: asOptionalNumber(raw.defaultCommissionAmount),
     countryCode: cc != null && String(cc).length > 0 ? String(cc).toUpperCase() : undefined,
     images: mapVehicleImages(raw.images),
   };
@@ -115,10 +233,26 @@ function mapRentalPhoto(p: Record<string, unknown>) {
   };
 }
 
+function mapAdditionalDriver(raw: Record<string, unknown>): AdditionalDriverInfo {
+  return {
+    id: asOptionalString(raw.id),
+    fullName: String(raw.fullName ?? ""),
+    birthDate: String(raw.birthDate ?? "").slice(0, 10),
+    driverLicenseNo: String(raw.driverLicenseNo ?? ""),
+    passportNo: String(raw.passportNo ?? ""),
+    driverLicenseImageDataUrl: asOptionalString(raw.driverLicenseImageDataUrl),
+    passportImageDataUrl: asOptionalString(raw.passportImageDataUrl),
+  };
+}
+
 export function mapRentalFromApi(raw: Record<string, unknown>): RentalSession {
   const customer = raw.customer as Record<string, unknown> | null | undefined;
   const feedbackRaw = raw.feedback as Record<string, unknown> | null | undefined;
   const photos = Array.isArray(raw.photos) ? raw.photos.map((p) => mapRentalPhoto(p as Record<string, unknown>)) : [];
+  const additionalDriversRaw = raw.additionalDrivers as unknown[] | undefined;
+  const additionalDrivers = Array.isArray(additionalDriversRaw)
+    ? additionalDriversRaw.map((d) => mapAdditionalDriver(d as Record<string, unknown>))
+    : undefined;
   const accidentReportsRaw = raw.accidentReports as unknown[] | undefined;
   const accidentReports =
     Array.isArray(accidentReportsRaw) && accidentReportsRaw.length > 0
@@ -150,12 +284,22 @@ export function mapRentalFromApi(raw: Record<string, unknown>): RentalSession {
     endDate,
     createdAt,
     status: normalizeRentalStatus(raw.status),
+    commissionAmount: asOptionalNumber(raw.commissionAmount),
+    commissionFlow:
+      raw.commissionFlow === "collect" || raw.commissionFlow === "pay" ? (raw.commissionFlow as "collect" | "pay") : undefined,
+    commissionCompany: asOptionalString(raw.commissionCompany),
     customer: {
       fullName: String(customer?.fullName ?? ""),
       nationalId: String(customer?.nationalId ?? ""),
       passportNo: String(customer?.passportNo ?? ""),
       phone: String(customer?.phone ?? ""),
+      email: asOptionalString(customer?.email),
+      birthDate: asOptionalString(customer?.birthDate)?.slice(0, 10),
+      driverLicenseNo: asOptionalString(customer?.driverLicenseNo),
+      driverLicenseImageDataUrl: asOptionalString(customer?.driverLicenseImageDataUrl),
+      passportImageDataUrl: asOptionalString(customer?.passportImageDataUrl),
     },
+    additionalDrivers: additionalDrivers?.length ? additionalDrivers : undefined,
     photos,
     accidentReports: accidentReports?.length ? accidentReports : undefined,
   };
@@ -234,6 +378,11 @@ export async function fetchRentalsFromRentApi(): Promise<RentalSession[]> {
   return data.map((row) => mapRentalFromApi(row as Record<string, unknown>));
 }
 
+export async function fetchRentalByIdFromRentApi(id: string): Promise<RentalSession> {
+  const { data } = await rentClient().get<unknown>(`/rentals/${id}`);
+  return mapRentalFromApi(data as Record<string, unknown>);
+}
+
 export async function fetchPaymentsFromRentApi(): Promise<PaymentLog[]> {
   const { data } = await rentClient().get<unknown[]>("/payments");
   if (!Array.isArray(data)) return [];
@@ -273,6 +422,12 @@ export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Pro
     model: payload.model,
     year: payload.year,
     maintenance: payload.maintenance,
+    external: Boolean(payload.external),
+    externalCompany: payload.externalCompany?.trim() || undefined,
+    defaultCommissionAmount:
+      payload.defaultCommissionAmount != null && Number.isFinite(payload.defaultCommissionAmount)
+        ? payload.defaultCommissionAmount
+        : undefined,
     images: payload.images && Object.keys(payload.images).length > 0 ? payload.images : undefined,
   };
   if (payload.countryCode && payload.countryCode.length === 2) {
@@ -287,8 +442,125 @@ export async function createRentalOnRentApi(payload: CreateRentalPayload): Promi
     vehicleId: payload.vehicleId,
     startDate: payload.startDate,
     endDate: payload.endDate,
-    customer: payload.customer,
+    customer: {
+      ...payload.customer,
+      email: payload.customer.email?.trim() || undefined,
+      birthDate: payload.customer.birthDate || undefined,
+      driverLicenseNo: payload.customer.driverLicenseNo?.trim() || undefined,
+      driverLicenseImageDataUrl: payload.customer.driverLicenseImageDataUrl || undefined,
+      passportImageDataUrl: payload.customer.passportImageDataUrl || undefined,
+    },
+    commissionAmount: payload.commissionAmount,
+    commissionFlow: payload.commissionFlow,
+    commissionCompany: payload.commissionCompany?.trim() || undefined,
+    additionalDrivers: payload.additionalDrivers,
     status: payload.status,
   });
   return mapRentalFromApi(data as Record<string, unknown>);
+}
+
+export async function updateRentalOnRentApi(id: string, payload: UpdateRentalPayload): Promise<RentalSession> {
+  const { data } = await rentClient().patch<unknown>(`/rentals/${id}`, {
+    startDate: payload.startDate,
+    endDate: payload.endDate,
+    commissionAmount:
+      payload.commissionAmount != null && Number.isFinite(payload.commissionAmount)
+        ? payload.commissionAmount
+        : undefined,
+    commissionFlow: payload.commissionFlow,
+    commissionCompany: payload.commissionCompany?.trim() || undefined,
+    status: payload.status,
+    customer: payload.customer
+      ? {
+          fullName: payload.customer.fullName?.trim() || undefined,
+          nationalId: payload.customer.nationalId?.trim() || undefined,
+          passportNo: payload.customer.passportNo?.trim() || undefined,
+          phone: payload.customer.phone?.trim() || undefined,
+          email: payload.customer.email?.trim() || undefined,
+          birthDate: payload.customer.birthDate || undefined,
+          driverLicenseNo: payload.customer.driverLicenseNo?.trim() || undefined,
+        }
+      : undefined,
+  });
+  return mapRentalFromApi(data as Record<string, unknown>);
+}
+
+function mapRentalRequestFromApi(raw: Record<string, unknown>): RentalRequestDto {
+  const customerRaw = (raw.customer ?? {}) as Record<string, unknown>;
+  const additionalRaw = raw.additionalDrivers as unknown[] | undefined;
+  const green = asOptionalNumber(raw.greenInsuranceFee) ?? 0;
+  return {
+    id: String(raw.id),
+    referenceNo: String(raw.referenceNo ?? ""),
+    createdAt: asOptionalString(raw.createdAt),
+    status:
+      raw.status === "approved" || raw.status === "rejected" || raw.status === "pending"
+        ? (raw.status as RentalRequestStatus)
+        : "pending",
+    statusMessage: asOptionalString(raw.statusMessage),
+    vehicleId: asOptionalString(raw.vehicleId),
+    startDate: String(raw.startDate ?? "").slice(0, 10),
+    endDate: String(raw.endDate ?? "").slice(0, 10),
+    outsideCountryTravel: Boolean(raw.outsideCountryTravel),
+    greenInsuranceFee: green,
+    note: asOptionalString(raw.note),
+    contractPdfPath: asOptionalString(raw.contractPdfPath),
+    whatsappContractSentAt: asOptionalString(raw.whatsappContractSentAt),
+    whatsappContractError: asOptionalString(raw.whatsappContractError),
+    customer: {
+      fullName: String(customerRaw.fullName ?? ""),
+      phone: String(customerRaw.phone ?? ""),
+      email: String(customerRaw.email ?? ""),
+      birthDate: String(customerRaw.birthDate ?? "").slice(0, 10),
+      nationalId: asOptionalString(customerRaw.nationalId),
+      passportNo: String(customerRaw.passportNo ?? ""),
+      driverLicenseNo: String(customerRaw.driverLicenseNo ?? ""),
+      passportImageDataUrl: asOptionalString(customerRaw.passportImageDataUrl),
+      driverLicenseImageDataUrl: asOptionalString(customerRaw.driverLicenseImageDataUrl),
+    },
+    additionalDrivers:
+      Array.isArray(additionalRaw) && additionalRaw.length > 0
+        ? additionalRaw.map((d) => {
+            const row = d as Record<string, unknown>;
+            return {
+              id: asOptionalString(row.id),
+              fullName: String(row.fullName ?? ""),
+              birthDate: String(row.birthDate ?? "").slice(0, 10),
+              driverLicenseNo: String(row.driverLicenseNo ?? ""),
+              passportNo: String(row.passportNo ?? ""),
+              passportImageDataUrl: asOptionalString(row.passportImageDataUrl),
+              driverLicenseImageDataUrl: asOptionalString(row.driverLicenseImageDataUrl),
+            };
+          })
+        : undefined,
+  };
+}
+
+export async function createRentalRequestOnRentApi(payload: RentalRequestFormPayload): Promise<RentalRequestDto> {
+  const { data } = await rentClient().post<unknown>("/rental-requests", payload);
+  return mapRentalRequestFromApi(data as Record<string, unknown>);
+}
+
+export async function queryRentalRequestByReferenceOnRentApi(referenceNo: string): Promise<RentalRequestDto> {
+  const ref = referenceNo.trim();
+  const { data } = await rentClient().get<unknown>(`/rental-requests/reference/${encodeURIComponent(ref)}`);
+  return mapRentalRequestFromApi(data as Record<string, unknown>);
+}
+
+export async function fetchRentalRequestsFromRentApi(): Promise<RentalRequestDto[]> {
+  const { data } = await rentClient().get<unknown[]>("/rental-requests");
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapRentalRequestFromApi(row as Record<string, unknown>));
+}
+
+export async function updateRentalRequestStatusOnRentApi(
+  id: string,
+  status: RentalRequestStatus,
+  statusMessage?: string,
+): Promise<RentalRequestDto> {
+  const { data } = await rentClient().patch<unknown>(`/rental-requests/${id}/status`, {
+    status,
+    statusMessage: statusMessage?.trim() || undefined,
+  });
+  return mapRentalRequestFromApi(data as Record<string, unknown>);
 }

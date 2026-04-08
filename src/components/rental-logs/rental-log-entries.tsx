@@ -73,6 +73,15 @@ function SessionSummary({
             </Link>
           </p>
         )}
+        <p className="text-xs">
+          <Link
+            href={`/rentals/${s.id}`}
+            className="font-medium text-primary underline-offset-2 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            Kiralama detayına git
+          </Link>
+        </p>
         <p className="text-xs text-muted-foreground">
           Dönem:{" "}
           <span className="font-mono text-foreground">
@@ -176,8 +185,8 @@ export function RentalLogEntries({ sessions, plateOf, expandableDetails }: Props
   if (expandableDetails) {
     return (
       <ul className="mt-4 space-y-2">
-        {sessions.map((s) => (
-          <li key={s.id} className="overflow-hidden rounded-lg border bg-muted/20">
+        {sessions.map((s, idx) => (
+          <li key={s.id} className={`overflow-hidden rounded-lg border ${idx % 2 === 0 ? "bg-muted/20" : "bg-background"}`}>
             <Collapsible>
               <CollapsibleTrigger asChild>
                 <button
@@ -202,8 +211,13 @@ export function RentalLogEntries({ sessions, plateOf, expandableDetails }: Props
 
   return (
     <ul className="mt-4 space-y-0 divide-y divide-border rounded-lg border bg-muted/20">
-      {sessions.map((s) => (
-        <li key={s.id} className="flex flex-col gap-1 px-3 py-3 sm:flex-row sm:items-start sm:gap-4">
+      {sessions.map((s, idx) => (
+        <li
+          key={s.id}
+          className={`flex flex-col gap-1 px-3 py-3 sm:flex-row sm:items-start sm:gap-4 ${
+            idx % 2 === 0 ? "bg-muted/10" : "bg-background"
+          }`}
+        >
           <SessionSummary s={s} plateOf={plateOf} showIdChip />
         </li>
       ))}

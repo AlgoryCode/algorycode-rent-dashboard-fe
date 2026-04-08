@@ -7,7 +7,9 @@ import {
   createRentalOnRentApi,
   fetchRentalsFromRentApi,
   getRentApiErrorMessage,
+  updateRentalOnRentApi,
   type CreateRentalPayload,
+  type UpdateRentalPayload,
 } from "@/lib/rent-api";
 
 export function useFleetSessions() {
@@ -25,11 +27,19 @@ export function useFleetSessions() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateRentalPayload }) => updateRentalOnRentApi(id, payload),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: rentKeys.rentals() });
+    },
+  });
+
   const allSessions = useMemo(() => sessions, [sessions]);
 
   return {
     allSessions,
     createRental: createMutation.mutateAsync.bind(createMutation),
+    updateRental: (id: string, payload: UpdateRentalPayload) => updateMutation.mutateAsync({ id, payload }),
     ready: !isPending,
     isRefreshing: isFetching && !isPending,
     error: error ? getRentApiErrorMessage(error) : null,

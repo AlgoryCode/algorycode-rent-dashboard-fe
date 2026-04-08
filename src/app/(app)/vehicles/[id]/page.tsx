@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+
 import { VehicleDetailRoute } from "./vehicle-detail-route";
 
 type PageProps = {
@@ -5,5 +7,9 @@ type PageProps = {
 };
 
 export default function VehicleDetailPage({ params }: PageProps) {
-  return <VehicleDetailRoute params={params} />;
+  return (
+    <Suspense fallback={null}>
+      <VehicleDetailRoute params={params} />
+    </Suspense>
+  );
 }

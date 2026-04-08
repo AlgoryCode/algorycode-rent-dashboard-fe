@@ -8,6 +8,21 @@ export type CustomerInfo = {
   nationalId: string;
   passportNo: string;
   phone: string;
+  email?: string;
+  birthDate?: string;
+  driverLicenseNo?: string;
+  driverLicenseImageDataUrl?: string;
+  passportImageDataUrl?: string;
+};
+
+export type AdditionalDriverInfo = {
+  id?: string;
+  fullName: string;
+  birthDate: string;
+  driverLicenseNo: string;
+  passportNo: string;
+  driverLicenseImageDataUrl?: string;
+  passportImageDataUrl?: string;
 };
 
 export type RentalAccidentReport = {
@@ -27,7 +42,11 @@ export type RentalSession = {
   createdAt?: string;
   /** İş akışı statüsü (yoksa aktif kabul edilir) */
   status?: RentalStatus;
+  commissionAmount?: number;
+  commissionFlow?: "collect" | "pay";
+  commissionCompany?: string;
   customer: CustomerInfo;
+  additionalDrivers?: AdditionalDriverInfo[];
   /** Kiralama başına en fazla bir müşteri yorumu */
   feedback?: { at: string; text: string };
   photos: { id: string; url: string; caption?: string }[];
@@ -43,6 +62,12 @@ export type Vehicle = {
   year: number;
   /** Bakımda — kiralanamaz */
   maintenance?: boolean;
+  /** Araç başka firmadan geldiyse true */
+  external?: boolean;
+  /** Harici araç için firma adı */
+  externalCompany?: string;
+  /** Araç bazlı varsayılan komisyon */
+  defaultCommissionAmount?: number;
   /** ISO 3166-1 alpha-2 — ülke rengi için */
   countryCode?: string;
   /** Açıdan görüntüler (data URL, demo saklama) */

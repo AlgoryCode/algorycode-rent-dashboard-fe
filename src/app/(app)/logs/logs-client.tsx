@@ -1,12 +1,25 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Plus } from "lucide-react";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { RentalLogEntries } from "@/components/rental-logs/rental-log-entries";
 import { RentalLogFiltersBar } from "@/components/rental-logs/rental-log-filters-bar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
 import { useFleetVehicles } from "@/hooks/use-fleet-vehicles";
 import {
@@ -18,9 +31,12 @@ import {
 import { vehiclePlate } from "@/lib/rental-metadata";
 
 export function RentalLogsClient() {
+  const router = useRouter();
   const { allSessions } = useFleetSessions();
   const { allVehicles } = useFleetVehicles();
   const [filters, setFilters] = useState<RentalLogFilterValues>(emptyRentalLogFilters);
+  const [newRentalOpen, setNewRentalOpen] = useState(false);
+  const [pickedVehicleId, setPickedVehicleId] = useState<string>("");
 
   const vehiclesById = useMemo(() => new Map(allVehicles.map((v) => [v.id, v])), [allVehicles]);
 
@@ -34,17 +50,77 @@ export function RentalLogsClient() {
     return sortSessionsByLogTimeDesc(list);
   }, [allSessions, filters, vehiclesById]);
 
+  const goToNewRental = () => {
+    if (!pickedVehicleId) {
+      toast.error("Araç seçin.");
+      return;
+    }
+    const v = allVehicles.find((x) => x.id === pickedVehicleId);
+    if (!v) {
+      toast.error("Araç bulunamadı.");
+      return;
+    }
+    if (v.maintenance) {
+      toast.error("Bu araç bakımda; kiralama oluşturulamaz.");
+      return;
+    }
+    setNewRentalOpen(false);
+    setPickedVehicleId("");
+    router.push(`/vehicles/${pickedVehicleId}?yeniKiralama=1`);
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <div>
-        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <CalendarDays className="h-5 w-5 text-primary" />
-          Kiralamalar
-        </h1>
-        <p className="text-xs text-muted-foreground">
-          Tüm araçlar için kiralama günlük kayıtları. Müşteri veya tarih ile süzebilir, plakaya göre daraltabilirsiniz.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <CalendarDays className="h-5 w-5 text-primary" />
+            Kiralamalar
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Tüm araçlar için kiralama günlük kayıtları. Müşteri veya tarih ile süzebilir, plakaya göre daraltabilirsiniz.
+          </p>
+        </div>
+        <Button type="button" size="sm" className="h-8 shrink-0 gap-1.5 text-xs" onClick={() => setNewRentalOpen(true)}>
+          <Plus className="h-3.5 w-3.5" />
+          Yeni kiralama oluştur
+        </Button>
       </div>
+
+      <Dialog open={newRentalOpen} onOpenChange={setNewRentalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Yeni kiralama</DialogTitle>
+            <DialogDescription className="text-xs">
+              Kiralama kaydı eklemek için araç seçin; araç detayında form açılacaktır.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs">Araç</Label>
+            <Select value={pickedVehicleId || undefined} onValueChange={setPickedVehicleId}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Plaka seçin…" />
+              </SelectTrigger>
+              <SelectContent>
+                {allVehicles.map((v) => (
+                  <SelectItem key={v.id} value={v.id} disabled={Boolean(v.maintenance)}>
+                    {v.plate} — {v.brand} {v.model}
+                    {v.maintenance ? " (bakım)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={() => setNewRentalOpen(false)}>
+              Vazgeç
+            </Button>
+            <Button type="button" size="sm" className="h-9 text-xs" onClick={goToNewRental}>
+              Devam
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="glow-card">
         <CardHeader className="py-3">

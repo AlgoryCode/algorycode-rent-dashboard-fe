@@ -3,6 +3,12 @@ import type { NextRequest } from "next/server";
 
 const AUTH_PATH = "/login";
 
+const TALEP_KIOSK_COOKIE = "talep_kiosk_lock";
+
+function isLockedTalepPath(pathname: string) {
+  return pathname === "/talep/p" || pathname.startsWith("/talep/p/");
+}
+
 function isProtectedPath(pathname: string) {
   return (
     pathname === "/" ||
@@ -13,6 +19,8 @@ function isProtectedPath(pathname: string) {
     pathname.startsWith("/logs") ||
     pathname.startsWith("/calendar") ||
     pathname.startsWith("/payments") ||
+    pathname.startsWith("/requests") ||
+    pathname.startsWith("/rentals") ||
     pathname.startsWith("/users") ||
     pathname.startsWith("/settings")
   );
@@ -25,6 +33,17 @@ function hasAccessToken(req: NextRequest) {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const authed = hasAccessToken(req);
+  const kioskLock = req.cookies.get(TALEP_KIOSK_COOKIE)?.value === "1";
+
+  if (kioskLock && !authed) {
+    if (isLockedTalepPath(pathname)) {
+      return NextResponse.next();
+    }
+    const url = req.nextUrl.clone();
+    url.pathname = "/talep/p";
+    url.search = "";
+    return NextResponse.redirect(url);
+  }
 
   if (pathname === AUTH_PATH) {
     if (authed) return NextResponse.redirect(new URL("/dashboard", req.url));
@@ -45,26 +64,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    "/",
-    "/login",
-    "/dashboard",
-    "/dashboard/:path*",
-    "/vehicles",
-    "/vehicles/:path*",
-    "/countries",
-    "/countries/:path*",
-    "/customers",
-    "/customers/:path*",
-    "/logs",
-    "/logs/:path*",
-    "/calendar",
-    "/calendar/:path*",
-    "/payments",
-    "/payments/:path*",
-    "/users",
-    "/users/:path*",
-    "/settings",
-    "/settings/:path*",
-  ],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };

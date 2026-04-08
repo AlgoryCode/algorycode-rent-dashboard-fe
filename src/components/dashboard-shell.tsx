@@ -10,6 +10,8 @@ import {
   CarFront,
   Globe2,
   LayoutDashboard,
+  MailCheck,
+  MessagesSquare,
   LogOut,
   Menu,
   Settings,
@@ -33,8 +35,10 @@ const nav = [
   { href: "/logs", label: "Kiralamalar", icon: CalendarDays },
   { href: "/calendar", label: "Takvim", icon: Calendar },
   { href: "/payments", label: "Ödemeler", icon: Wallet },
+  { href: "/requests", label: "Talepler", icon: MailCheck },
   { href: "/users", label: "Kullanıcılar", icon: UserCog },
   { href: "/customers", label: "Customers", icon: Users },
+  { href: "/customers/channel", label: "Toplu mesaj", icon: MessagesSquare },
   { href: "/settings", label: "Ayarlar", icon: Settings },
 ] as const;
 
@@ -42,10 +46,21 @@ function isNavActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
   if (href === "/vehicles") return pathname === "/vehicles" || pathname.startsWith("/vehicles/");
   if (href === "/countries") return pathname === "/countries" || pathname.startsWith("/countries/");
-  if (href === "/customers") return pathname === "/customers" || pathname.startsWith("/customers/");
-  if (href === "/logs") return pathname === "/logs" || pathname.startsWith("/logs/");
+  if (href === "/customers") {
+    return (
+      pathname === "/customers" ||
+      (pathname.startsWith("/customers/") && !pathname.startsWith("/customers/channel"))
+    );
+  }
+  if (href === "/customers/channel") {
+    return pathname === "/customers/channel" || pathname.startsWith("/customers/channel/");
+  }
+  if (href === "/logs") {
+    return pathname === "/logs" || pathname.startsWith("/logs/") || pathname.startsWith("/rentals/");
+  }
   if (href === "/calendar") return pathname === "/calendar" || pathname.startsWith("/calendar/");
   if (href === "/payments") return pathname === "/payments" || pathname.startsWith("/payments/");
+  if (href === "/requests") return pathname === "/requests" || pathname.startsWith("/requests/");
   if (href === "/users") return pathname === "/users" || pathname.startsWith("/users/");
   if (href === "/settings") return pathname === "/settings" || pathname.startsWith("/settings/");
   return false;

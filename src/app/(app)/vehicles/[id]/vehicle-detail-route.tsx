@@ -2,6 +2,7 @@
 
 import { use } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { VehicleDetailClient } from "./vehicle-detail-client";
@@ -12,6 +13,8 @@ type Props = { params: Promise<{ id: string }> };
 
 export function VehicleDetailRoute({ params }: Props) {
   const { id } = use(params);
+  const searchParams = useSearchParams();
+  const autoOpenNewRental = searchParams.get("yeniKiralama") === "1";
   const { allVehicles } = useFleetVehicles();
   const mounted = useIsClient();
 
@@ -36,5 +39,5 @@ export function VehicleDetailRoute({ params }: Props) {
     );
   }
 
-  return <VehicleDetailClient vehicle={vehicle} />;
+  return <VehicleDetailClient vehicle={vehicle} autoOpenNewRental={autoOpenNewRental} />;
 }

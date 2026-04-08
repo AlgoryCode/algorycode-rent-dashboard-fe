@@ -62,6 +62,9 @@ export function VehiclesClient() {
   const [model, setModel] = useState("");
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [maintenance, setMaintenance] = useState(false);
+  const [externalVehicle, setExternalVehicle] = useState(false);
+  const [externalCompany, setExternalCompany] = useState("");
+  const [defaultCommissionAmount, setDefaultCommissionAmount] = useState("");
   const [vehicleCountry, setVehicleCountry] = useState<string>(COUNTRY_NONE);
   const [draftImages, setDraftImages] = useState<VehicleImages>({});
 
@@ -102,6 +105,9 @@ export function VehiclesClient() {
     setModel("");
     setYear(String(new Date().getFullYear()));
     setMaintenance(false);
+    setExternalVehicle(false);
+    setExternalCompany("");
+    setDefaultCommissionAmount("");
     setVehicleCountry(COUNTRY_NONE);
     setDraftImages({});
   };
@@ -120,6 +126,17 @@ export function VehiclesClient() {
       toast.error("Bu plaka zaten kayıtlı.");
       return;
     }
+    if (externalVehicle && !externalCompany.trim()) {
+      toast.error("Harici araç için firma adı girin.");
+      return;
+    }
+    const commissionRaw = defaultCommissionAmount.trim();
+    const defaultCommission =
+      commissionRaw.length > 0 ? Number.parseFloat(commissionRaw.replace(",", ".")) : undefined;
+    if (defaultCommission != null && (!Number.isFinite(defaultCommission) || defaultCommission < 0)) {
+      toast.error("Komisyon tutarı sayı olmalı ve negatif olamaz.");
+      return;
+    }
     const images = compactVehicleImages(draftImages);
     try {
       await addVehicle({
@@ -128,6 +145,9 @@ export function VehiclesClient() {
         model: m,
         year: y,
         maintenance: Boolean(maintenance),
+        external: externalVehicle,
+        externalCompany: externalVehicle ? externalCompany.trim() : undefined,
+        defaultCommissionAmount: defaultCommission,
         countryCode: vehicleCountry !== COUNTRY_NONE ? vehicleCountry : undefined,
         images: images ?? undefined,
       });
@@ -208,48 +228,48 @@ export function VehiclesClient() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(({ v, status }) => {
+                {filtered.map(({ v, status }, idx) => {
                   const cc = v.countryCode?.toUpperCase();
                   const countryMeta = cc ? countryByCode.get(cc) : undefined;
                   const rowAccent = countryMeta?.colorCode ?? (cc ? "#94a3b8" : undefined);
                   return (
-                  <TableRow
-                    key={v.id}
-                    role="link"
-                    tabIndex={0}
-                    aria-label={`${v.plate} ${v.brand} ${v.model}, detay`}
-                    className="cursor-pointer text-sm hover:bg-muted/60"
-                    onClick={() => router.push(`/vehicles/${v.id}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        router.push(`/vehicles/${v.id}`);
-                      }
-                    }}
-                  >
-                    <TableCell className="py-2 font-mono text-xs font-medium">{v.plate}</TableCell>
-                    <TableCell className="py-2">
-                      {cc ? (
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-5 w-5 shrink-0 rounded border border-border/60"
-                            style={{ backgroundColor: rowAccent }}
-                            title={countryMeta ? `${countryMeta.name} (${cc})` : `Bilinmeyen ülke: ${cc}`}
-                            aria-hidden
-                          />
-                          <span className="font-mono text-xs text-muted-foreground">{cc}</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="py-2">
-                      <span className="font-medium">{v.brand}</span>{" "}
-                      <span className="text-muted-foreground">{v.model}</span>
-                    </TableCell>
-                    <TableCell className="py-2 text-xs text-muted-foreground">{v.year}</TableCell>
-                    <TableCell className="py-2">{statusBadge(status)}</TableCell>
-                  </TableRow>
+                    <TableRow
+                      key={v.id}
+                      role="link"
+                      tabIndex={0}
+                      aria-label={`${v.plate} ${v.brand} ${v.model}, detay`}
+                      className={`cursor-pointer text-sm hover:bg-muted/60 ${idx % 2 === 0 ? "bg-muted/20" : "bg-background"}`}
+                      onClick={() => router.push(`/vehicles/${v.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          router.push(`/vehicles/${v.id}`);
+                        }
+                      }}
+                    >
+                      <TableCell className="py-2 font-mono text-xs font-medium">{v.plate}</TableCell>
+                      <TableCell className="py-2">
+                        {cc ? (
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-5 w-5 shrink-0 rounded border border-border/60"
+                              style={{ backgroundColor: rowAccent }}
+                              title={countryMeta ? `${countryMeta.name} (${cc})` : `Bilinmeyen ülke: ${cc}`}
+                              aria-hidden
+                            />
+                            <span className="font-mono text-xs text-muted-foreground">{cc}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="py-2">
+                        <span className="font-medium">{v.brand}</span>{" "}
+                        <span className="text-muted-foreground">{v.model}</span>
+                      </TableCell>
+                      <TableCell className="py-2 text-xs text-muted-foreground">{v.year}</TableCell>
+                      <TableCell className="py-2">{statusBadge(status)}</TableCell>
+                    </TableRow>
                   );
                 })}
               </TableBody>
@@ -327,6 +347,38 @@ export function VehiclesClient() {
                 <input type="checkbox" checked={maintenance} onChange={(e) => setMaintenance(e.target.checked)} className="rounded border-input" />
                 Bakımda (kiralanamaz)
               </label>
+              <label className="flex cursor-pointer items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={externalVehicle}
+                  onChange={(e) => setExternalVehicle(e.target.checked)}
+                  className="rounded border-input"
+                />
+                Harici araç (başka firmadan)
+              </label>
+              {externalVehicle && (
+                <div className="space-y-1">
+                  <Label htmlFor="nv-external-company">Harici firma adı</Label>
+                  <Input
+                    id="nv-external-company"
+                    value={externalCompany}
+                    onChange={(e) => setExternalCompany(e.target.value)}
+                    placeholder="Örn: X Rent A Car"
+                  />
+                </div>
+              )}
+              <div className="space-y-1">
+                <Label htmlFor="nv-default-commission">Varsayılan komisyon (opsiyonel)</Label>
+                <Input
+                  id="nv-default-commission"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={defaultCommissionAmount}
+                  onChange={(e) => setDefaultCommissionAmount(e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
               <VehicleImageSlotsEditor value={draftImages} onChange={setDraftImages} />
             </div>
           </div>
