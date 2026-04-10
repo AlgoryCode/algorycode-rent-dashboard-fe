@@ -32,6 +32,8 @@ import { cn } from "@/lib/utils";
 const MAX_RENTALS_PER_CELL = 3;
 const ALL_VEHICLES_VALUE = "__all__";
 const VIEW_STORAGE_KEY = "fleet-calendar-view-mode-v1";
+/** Timeline gün sütunu genişliği (px); çubuk konumu bu ızgara ile hizalanır */
+const TIMELINE_DAY_COL_PX = 28;
 type ViewMode = "calendar" | "timeline";
 
 function accentForVehicleId(id: string): string {
@@ -121,6 +123,8 @@ export function FleetCalendarClient() {
       .filter((s) => s.startDate <= format(monthEnd, "yyyy-MM-dd") && s.endDate >= format(monthStart, "yyyy-MM-dd"))
       .sort((a, b) => b.startDate.localeCompare(a.startDate));
   }, [scopedSessions, monthEnd, monthStart]);
+
+  const timelineTrackWidthPx = monthDays.length * TIMELINE_DAY_COL_PX;
 
   const ready = sessionsReady && vehiclesReady;
   const error = sessionsError ?? vehiclesError;
@@ -333,63 +337,107 @@ export function FleetCalendarClient() {
               {timelineRows.length === 0 ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">Bu ay için eşleşen kiralama kaydı yok.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <div className="rounded-lg border border-border/70 bg-card/40 p-2">
-                    <div className="mb-2 grid grid-cols-[240px_1fr] gap-2 px-1">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kiralama</div>
-                      <div
-                        className="grid min-w-[760px]"
-                        style={{ gridTemplateColumns: `repeat(${monthDays.length}, minmax(24px, 1fr))` }}
-                      >
-                        {monthDays.map((d, idx) => (
-                          <div key={`h-${format(d, "yyyy-MM-dd")}`} className="text-center text-[9px] text-muted-foreground">
-                            {idx === 0 || idx === monthDays.length - 1 || idx % 3 === 0 ? `${idx + 1}` : "·"}
-                          </div>
-                        ))}
+                <div className="min-w-0 rounded-lg border border-border/70 bg-card shadow-sm">
+                  <div className="flex min-w-0">
+                    {/* Sol: plaka + tarih — yatay kaydırmada sabit */}
+                    <div className="z-10 w-[min(42vw,11rem)] shrink-0 border-r border-border/70 bg-card sm:w-44">
+                      <div className="flex h-10 items-end border-b border-border/60 bg-muted/25 px-2 pb-1">
+                        <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Kiralama
+                        </span>
                       </div>
-                    </div>
-
-                    <div className="space-y-1.5">
                       {timelineRows.map((s) => {
                         const v = vehicleById.get(s.vehicleId);
                         const plate = v?.plate ?? s.vehicleId.slice(0, 8);
-                        const accent = accentForVehicleId(s.vehicleId);
                         const start = parseISO(s.startDate);
                         const end = parseISO(s.endDate);
-                        const clampedStart = start < monthStart ? monthStart : start;
-                        const clampedEnd = end > monthEnd ? monthEnd : end;
-                        const msDay = 86_400_000;
-                        const startIdx = Math.max(0, Math.floor((clampedStart.getTime() - monthStart.getTime()) / msDay));
-                        const endIdx = Math.min(monthDays.length - 1, Math.floor((clampedEnd.getTime() - monthStart.getTime()) / msDay));
-                        const spanDays = Math.max(1, endIdx - startIdx + 1);
-                        const leftPct = (startIdx / monthDays.length) * 100;
-                        const widthPct = (spanDays / monthDays.length) * 100;
-                        const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / msDay) + 1);
+                        const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1);
                         return (
-                          <div key={s.id} className="grid grid-cols-[240px_1fr] gap-2 rounded-md border border-border/60 bg-background/70 px-1 py-1.5">
-                            <div className="min-w-0 px-1">
-                              <p className="truncate font-mono text-xs font-semibold">{plate}</p>
-                              <p className="truncate text-[10px] text-muted-foreground">
-                                {s.startDate} → {s.endDate} · {totalDays} gün
-                              </p>
-                            </div>
-                            <div className="relative block h-8 min-w-[760px] rounded bg-muted/50" title={`${plate}: ${s.startDate} → ${s.endDate} (${totalDays} gün)`}>
-                              <div
-                                className="absolute inset-y-1 overflow-hidden rounded px-2 text-[10px] font-semibold text-white"
-                                style={{ left: `${leftPct}%`, width: `${widthPct}%`, backgroundColor: accent }}
-                              >
-                                <span className="truncate">{plate}</span>
-                              </div>
-                            </div>
+                          <div
+                            key={`label-${s.id}`}
+                            className="flex h-16 flex-col justify-center border-b border-border/50 px-2 py-1 last:border-b-0"
+                          >
+                            <p className="truncate font-mono text-xs font-semibold leading-tight">{plate}</p>
+                            <p className="line-clamp-2 text-[10px] leading-snug text-muted-foreground">
+                              {s.startDate} → {s.endDate} · {totalDays} gün
+                            </p>
                           </div>
                         );
                       })}
+                    </div>
+                    {/* Sağ: yalnızca bu alan kayar; gün genişliği sabit px */}
+                    <div className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
+                      <div className="shrink-0" style={{ width: timelineTrackWidthPx }}>
+                        <div
+                          className="grid h-10 shrink-0 border-b border-border/60 bg-muted/30"
+                          style={{
+                            gridTemplateColumns: `repeat(${monthDays.length}, ${TIMELINE_DAY_COL_PX}px)`,
+                          }}
+                        >
+                          {monthDays.map((d, idx) => {
+                            const showNum =
+                              idx === 0 ||
+                              idx === monthDays.length - 1 ||
+                              (idx + 1) % 5 === 0 ||
+                              monthDays.length <= 14;
+                            return (
+                              <div
+                                key={`h-${format(d, "yyyy-MM-dd")}`}
+                                className="flex items-end justify-center border-l border-border/40 pb-0.5 text-[9px] tabular-nums text-muted-foreground first:border-l-0"
+                              >
+                                {showNum ? idx + 1 : ""}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {timelineRows.map((s) => {
+                          const v = vehicleById.get(s.vehicleId);
+                          const plate = v?.plate ?? s.vehicleId.slice(0, 8);
+                          const accent = accentForVehicleId(s.vehicleId);
+                          const start = parseISO(s.startDate);
+                          const end = parseISO(s.endDate);
+                          const clampedStart = start < monthStart ? monthStart : start;
+                          const clampedEnd = end > monthEnd ? monthEnd : end;
+                          const msDay = 86_400_000;
+                          const startIdx = Math.max(
+                            0,
+                            Math.floor((clampedStart.getTime() - monthStart.getTime()) / msDay),
+                          );
+                          const endIdx = Math.min(
+                            monthDays.length - 1,
+                            Math.floor((clampedEnd.getTime() - monthStart.getTime()) / msDay),
+                          );
+                          const spanDays = Math.max(1, endIdx - startIdx + 1);
+                          const leftPx = startIdx * TIMELINE_DAY_COL_PX;
+                          const widthPx = spanDays * TIMELINE_DAY_COL_PX;
+                          const totalDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / msDay) + 1);
+                          const barTitle = `${plate}: ${s.startDate} → ${s.endDate} (${totalDays} gün)`;
+                          return (
+                            <div
+                              key={`track-${s.id}`}
+                              className="relative h-16 shrink-0 border-b border-border/50 bg-muted/15 last:border-b-0"
+                              style={{ width: timelineTrackWidthPx }}
+                            >
+                              <div
+                                className="absolute inset-y-2 rounded-sm shadow-sm ring-1 ring-black/10 dark:ring-white/10"
+                                style={{
+                                  left: leftPx,
+                                  width: widthPx,
+                                  backgroundColor: accent,
+                                }}
+                                title={barTitle}
+                                aria-label={barTitle}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
               <p className="text-[11px] text-muted-foreground">
-                Sprint benzeri timeline: satırlar kiralamaları, yatay eksen ayın günlerini gösterir.
+                Timeline: sol sütunda kiralama özeti; günler yatay kaydırılır. Çubuk üzerine gelince tarih aralığını görebilirsiniz.
               </p>
             </div>
           )}

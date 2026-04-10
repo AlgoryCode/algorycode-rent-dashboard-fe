@@ -3,12 +3,6 @@ import type { NextRequest } from "next/server";
 
 const AUTH_PATH = "/login";
 
-const TALEP_KIOSK_COOKIE = "talep_kiosk_lock";
-
-function isLockedTalepPath(pathname: string) {
-  return pathname === "/talep/p" || pathname.startsWith("/talep/p/");
-}
-
 function isProtectedPath(pathname: string) {
   return (
     pathname === "/" ||
@@ -33,18 +27,24 @@ function hasAccessToken(req: NextRequest) {
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const authed = hasAccessToken(req);
-  const kioskLock = req.cookies.get(TALEP_KIOSK_COOKIE)?.value === "1";
 
-  if (kioskLock && !authed) {
-    if (isLockedTalepPath(pathname)) {
-      return NextResponse.next();
-    }
+  if (pathname === "/talep/p" || pathname.startsWith("/talep/p/")) {
     const url = req.nextUrl.clone();
-    url.pathname = "/talep/p";
-    url.search = "";
+    url.pathname = "/rental-request-form";
     return NextResponse.redirect(url);
   }
+  if (pathname === "/rental-request-form/kiosk" || pathname.startsWith("/rental-request-form/kiosk/")) {
+    const url = req.nextUrl.clone();
+    url.pathname = "/rental-request-form";
+    return NextResponse.redirect(url);
+  }
+  if (pathname === "/talep") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/rental-request-form";
+    return NextResponse.redirect(url);
+  }
+
+  const authed = hasAccessToken(req);
 
   if (pathname === AUTH_PATH) {
     if (authed) return NextResponse.redirect(new URL("/dashboard", req.url));

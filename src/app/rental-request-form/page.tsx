@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 
-import { TalepClient } from "./talep-client";
+import { TalepClient } from "./rental-request-form-client";
 
-export default function TalepPage() {
+export default function RentalRequestFormPage() {
   return (
     <Suspense fallback={null}>
       <TalepClient />

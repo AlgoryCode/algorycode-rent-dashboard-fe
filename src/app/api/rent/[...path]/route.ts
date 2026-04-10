@@ -36,7 +36,13 @@ async function proxy(req: NextRequest, pathSegments: string[], method: string): 
     if (body.length > 0) init.body = body;
   }
 
-  const res = await fetch(url, init);
+  let res: Response;
+  try {
+    res = await fetch(url, init);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Upstream fetch failed";
+    return NextResponse.json({ message: `Rent API'ye ulasilamadi: ${message}`, upstream: base }, { status: 502 });
+  }
   const outHeaders = new Headers();
   const resCt = res.headers.get("content-type");
   if (resCt) outHeaders.set("Content-Type", resCt);

@@ -3,6 +3,9 @@ import type { VehicleImages } from "@/lib/vehicle-images";
 
 export type { RentalStatus } from "@/lib/rental-status";
 
+/** Manuel / özet listede bireysel veya kurumsal müşteri ayrımı */
+export type CustomerKind = "individual" | "corporate";
+
 export type CustomerInfo = {
   fullName: string;
   nationalId: string;
@@ -13,6 +16,7 @@ export type CustomerInfo = {
   driverLicenseNo?: string;
   driverLicenseImageDataUrl?: string;
   passportImageDataUrl?: string;
+  kind?: CustomerKind;
 };
 
 export type AdditionalDriverInfo = {

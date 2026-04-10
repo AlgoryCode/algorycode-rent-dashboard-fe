@@ -3,7 +3,7 @@ export const VEHICLE_IMAGE_SLOTS = [
   { key: "rear", label: "Arka" },
   { key: "left", label: "Sol yan" },
   { key: "right", label: "Sağ yan" },
-  { key: "interiorDash", label: "İç panel" },
+  { key: "interiorDash", label: "Kokpit" },
   { key: "interiorRear", label: "Arka koltuk" },
 ] as const;
 

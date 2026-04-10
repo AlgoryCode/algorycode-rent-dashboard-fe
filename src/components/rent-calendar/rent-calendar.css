@@ -240,3 +240,18 @@
 .dark .rdp-root.rent-calendar-skin .rdp-day_button:hover:not(:disabled):not([aria-disabled="true"]) {
   box-shadow: 0 2px 8px hsl(0 0% 0% / 0.25);
 }
+
+/* Tarih aralığı seçimi (mode="range") */
+.rdp-root.rent-calendar-skin .rdp-range_start .rdp-day_button,
+.rdp-root.rent-calendar-skin .rdp-range_end .rdp-day_button {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+  font-weight: 600;
+}
+
+.rdp-root.rent-calendar-skin .rdp-range_middle .rdp-day_button {
+  background: hsl(var(--primary) / 0.22);
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--primary) / 0.25);
+}

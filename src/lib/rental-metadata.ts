@@ -1,4 +1,31 @@
-import type { CustomerInfo, RentalSession, Vehicle } from "@/lib/mock-fleet";
+import type { CustomerInfo, CustomerKind, RentalSession, Vehicle } from "@/lib/mock-fleet";
+
+export type { CustomerKind };
+
+export function resolveCustomerKind(c: CustomerInfo): CustomerKind {
+  return c.kind === "corporate" ? "corporate" : "individual";
+}
+
+/** Kiralamalar arasında en güncel (tarihe göre) pasaport/ehliyet görsel URL’lerini seçer. */
+function mergeCustomerFromRentals(rentals: RentalSession[]): CustomerInfo {
+  const sorted = [...rentals].sort((a, b) => sessionCreatedAt(b).localeCompare(sessionCreatedAt(a)));
+  const latest = sorted[0].customer;
+  let passport: string | undefined;
+  let license: string | undefined;
+  for (const s of sorted) {
+    if (!passport && s.customer.passportImageDataUrl) {
+      passport = s.customer.passportImageDataUrl;
+    }
+    if (!license && s.customer.driverLicenseImageDataUrl) {
+      license = s.customer.driverLicenseImageDataUrl;
+    }
+  }
+  return {
+    ...latest,
+    passportImageDataUrl: passport ?? latest.passportImageDataUrl,
+    driverLicenseImageDataUrl: license ?? latest.driverLicenseImageDataUrl,
+  };
+}
 
 /** Eski kayıtlarda yoksa başlangıç günü varsayılan saat ile kullanılır. */
 export function sessionCreatedAt(s: RentalSession): string {
@@ -32,9 +59,10 @@ export function aggregateCustomersFromSessions(sessions: RentalSession[]): Custo
 
   const rows: CustomerAggregateRow[] = [];
 
-  for (const [key, { customer, rentals }] of map) {
+  for (const [key, { rentals }] of map) {
     const sorted = [...rentals].sort((a, b) => sessionCreatedAt(b).localeCompare(sessionCreatedAt(a)));
     const lastActivity = sessionCreatedAt(sorted[0]);
+    const customer = mergeCustomerFromRentals(sorted);
     rows.push({
       key,
       customer,

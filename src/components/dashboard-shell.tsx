@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import {
   ArrowLeft,
   BarChart3,
@@ -28,6 +28,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetClose, SheetContent } from "@/components/ui/sheet";
+import { AppBreadcrumbs } from "@/components/app-breadcrumbs";
 import { ApiError } from "@/lib/api/errors";
 import { authService } from "@/lib/auth-service";
 import { cn } from "@/lib/utils";
@@ -35,24 +36,20 @@ import { cn } from "@/lib/utils";
 const nav = [
   { href: "/dashboard", label: "Hızlı menü", icon: LayoutDashboard },
   { href: "/vehicles", label: "Araçlar", icon: Car },
-  { href: "/reports", label: "Raporlar", icon: BarChart3 },
-  { href: "/countries", label: "Ülkeler", icon: Globe2 },
   { href: "/logs", label: "Kiralamalar", icon: CalendarDays },
   { href: "/calendar", label: "Takvim", icon: Calendar },
-  { href: "/payments", label: "Ödemeler", icon: Wallet },
+  { href: "/customers", label: "Müşteriler", icon: Users },
   { href: "/requests", label: "Talepler", icon: MailCheck },
   { href: "/users", label: "Kullanıcılar", icon: UserCog },
-  { href: "/customers", label: "Customers", icon: Users },
+  { href: "/payments", label: "Ödemeler", icon: Wallet },
+  { href: "/reports", label: "Raporlar", icon: BarChart3 },
+  { href: "/countries", label: "Ülkeler", icon: Globe2 },
   { href: "/customers/channel", label: "Toplu mesaj", icon: MessagesSquare },
   { href: "/settings", label: "Ayarlar", icon: Settings },
 ] as const;
 
 const desktopNav = nav.filter((i) => i.href !== "/dashboard");
-const extraSearchRoutes = [
-  { href: "/talep", label: "Talep formu" },
-  { href: "/talep/p", label: "Talep kiosku" },
-  { href: "/login", label: "Giriş" },
-] as const;
+const extraSearchRoutes = [{ href: "/login", label: "Giriş" }] as const;
 
 function isNavActive(pathname: string, href: string) {
   if (href === "/dashboard") return pathname === "/dashboard";
@@ -304,19 +301,19 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </Button>
         </header>
 
-        {showTemplateActions && (
-          <div className="sticky top-12 z-20 bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:top-11 sm:px-4">
-            <div className="flex items-center justify-between gap-2">
+        <div className="sticky top-12 z-20 border-b border-border/60 bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:top-11 sm:px-4">
+          <Suspense fallback={<div className="h-4 max-w-xs animate-pulse rounded bg-muted" aria-hidden />}>
+            <AppBreadcrumbs />
+          </Suspense>
+          {showTemplateActions ? (
+            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/50 pt-2">
               <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={goBack}>
                 <ArrowLeft className="h-3.5 w-3.5" />
                 Geri
               </Button>
-              <Button type="button" variant="outline" size="sm" className="h-8 text-xs sm:hidden" asChild>
-                <Link href="/dashboard">Hızlı menüye dön</Link>
-              </Button>
             </div>
-          </div>
-        )}
+          ) : null}
+        </div>
 
         <main className="flex-1 overflow-auto p-3 sm:p-4">{children}</main>
       </div>

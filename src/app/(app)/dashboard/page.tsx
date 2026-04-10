@@ -52,8 +52,23 @@ export default function DashboardPage() {
           );
         })}
       </div>
-      <div className="hidden h-full items-center justify-center sm:flex">
-        <p className="text-sm text-muted-foreground">Hizli menu kartlari sadece mobil gorunumde gosterilir.</p>
+      <div className="hidden flex-col items-center justify-center gap-4 p-6 sm:flex">
+        <div className="w-full max-w-lg rounded-2xl border border-primary/25 bg-gradient-to-br from-primary/10 to-cyan-500/10 p-5 shadow-sm">
+          <p className="text-sm font-semibold tracking-tight">Talep formu paylaşımı</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Müşteriye boş talep formu bağlantısını <span className="font-medium text-foreground">Talepler</span> sayfasındaki{" "}
+            <span className="font-medium text-foreground">Formu gönder</span> ile iletebilirsiniz.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href="/requests"
+              className="inline-flex h-9 items-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground shadow hover:bg-primary/90"
+            >
+              Taleplere git
+            </Link>
+          </div>
+        </div>
+        <p className="text-center text-xs text-muted-foreground">Mobilde hızlı erişim için yukarıdaki kare menüyü kullanın.</p>
       </div>
     </div>
   );

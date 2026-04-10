@@ -73,7 +73,7 @@ export type CreateRentalPayload = {
   customer: {
     fullName: string;
     nationalId: string;
-    passportNo: string;
+    passportNo?: string;
     phone: string;
     email?: string;
     birthDate?: string;
@@ -87,8 +87,8 @@ export type CreateRentalPayload = {
   additionalDrivers?: {
     fullName: string;
     birthDate: string;
-    driverLicenseNo: string;
-    passportNo: string;
+    driverLicenseNo?: string;
+    passportNo?: string;
     driverLicenseImageDataUrl: string;
     passportImageDataUrl: string;
   }[];
@@ -117,6 +117,8 @@ export type UpdateRentalPayload = {
     email?: string;
     birthDate?: string;
     driverLicenseNo?: string;
+    passportImageDataUrl?: string;
+    driverLicenseImageDataUrl?: string;
   };
 };
 
@@ -134,16 +136,16 @@ export type RentalRequestFormPayload = {
     email: string;
     birthDate: string;
     nationalId?: string;
-    passportNo: string;
-    driverLicenseNo: string;
+    passportNo?: string;
+    driverLicenseNo?: string;
     passportImageDataUrl: string;
     driverLicenseImageDataUrl: string;
   };
   additionalDrivers?: {
     fullName: string;
     birthDate: string;
-    driverLicenseNo: string;
-    passportNo: string;
+    driverLicenseNo?: string;
+    passportNo?: string;
     passportImageDataUrl: string;
     driverLicenseImageDataUrl: string;
   }[];
@@ -162,6 +164,8 @@ export type RentalRequestDto = {
   greenInsuranceFee: number;
   note?: string;
   contractPdfPath?: string;
+  /** Sunucu: onaylı ve henüz PDF yoksa true — “Sözleşme oluştur” gösterimi için. */
+  contractGenerationAvailable?: boolean;
   whatsappContractSentAt?: string;
   whatsappContractError?: string;
   customer: {
@@ -495,6 +499,23 @@ export async function deleteVehicleOnRentApi(id: string): Promise<void> {
   await rentClient().delete(`/vehicles/${id}`);
 }
 
+/** Tek slot: data URL veya base64 gövde; sunucu object storage’a yükler. */
+export async function replaceVehicleImageSlotOnRentApi(
+  vehicleId: string,
+  slot: VehicleImageSlot,
+  imageDataUrl: string,
+): Promise<Vehicle> {
+  const { data } = await rentClient().put<unknown>(`/vehicles/${vehicleId}/images/${slot}`, {
+    image: imageDataUrl,
+  });
+  return mapVehicleFromApi(data as Record<string, unknown>);
+}
+
+export async function deleteVehicleImageSlotOnRentApi(vehicleId: string, slot: VehicleImageSlot): Promise<Vehicle> {
+  const { data } = await rentClient().delete<unknown>(`/vehicles/${vehicleId}/images/${slot}`);
+  return mapVehicleFromApi(data as Record<string, unknown>);
+}
+
 export async function createRentalOnRentApi(payload: CreateRentalPayload): Promise<RentalSession> {
   const { data } = await rentClient().post<unknown>("/rentals", {
     vehicleId: payload.vehicleId,
@@ -504,6 +525,7 @@ export async function createRentalOnRentApi(payload: CreateRentalPayload): Promi
       ...payload.customer,
       email: payload.customer.email?.trim() || undefined,
       birthDate: payload.customer.birthDate || undefined,
+      passportNo: payload.customer.passportNo?.trim() ?? "",
       driverLicenseNo: payload.customer.driverLicenseNo?.trim() || undefined,
       driverLicenseImageDataUrl: payload.customer.driverLicenseImageDataUrl || undefined,
       passportImageDataUrl: payload.customer.passportImageDataUrl || undefined,
@@ -511,7 +533,11 @@ export async function createRentalOnRentApi(payload: CreateRentalPayload): Promi
     commissionAmount: payload.commissionAmount,
     commissionFlow: payload.commissionFlow,
     commissionCompany: payload.commissionCompany?.trim() || undefined,
-    additionalDrivers: payload.additionalDrivers,
+    additionalDrivers: payload.additionalDrivers?.map((d) => ({
+      ...d,
+      driverLicenseNo: d.driverLicenseNo?.trim() ?? "",
+      passportNo: d.passportNo?.trim() ?? "",
+    })),
     status: payload.status,
   });
   return mapRentalFromApi(data as Record<string, unknown>);
@@ -537,6 +563,8 @@ export async function updateRentalOnRentApi(id: string, payload: UpdateRentalPay
           email: payload.customer.email?.trim() || undefined,
           birthDate: payload.customer.birthDate || undefined,
           driverLicenseNo: payload.customer.driverLicenseNo?.trim() || undefined,
+          passportImageDataUrl: payload.customer.passportImageDataUrl?.trim() || undefined,
+          driverLicenseImageDataUrl: payload.customer.driverLicenseImageDataUrl?.trim() || undefined,
         }
       : undefined,
   });
@@ -563,6 +591,12 @@ function mapRentalRequestFromApi(raw: Record<string, unknown>): RentalRequestDto
     greenInsuranceFee: green,
     note: asOptionalString(raw.note),
     contractPdfPath: asOptionalString(raw.contractPdfPath),
+    contractGenerationAvailable: (() => {
+      const v = raw.contractGenerationAvailable;
+      if (v === true || String(v) === "true") return true;
+      if (v === false || String(v) === "false") return false;
+      return undefined;
+    })(),
     whatsappContractSentAt: asOptionalString(raw.whatsappContractSentAt),
     whatsappContractError: asOptionalString(raw.whatsappContractError),
     customer: {
@@ -621,4 +655,22 @@ export async function updateRentalRequestStatusOnRentApi(
     statusMessage: statusMessage?.trim() || undefined,
   });
   return mapRentalRequestFromApi(data as Record<string, unknown>);
+}
+
+/** Onaylı talep için PDF üretir (object storage + isteğe bağlı WhatsApp). */
+export async function generateRentalRequestContractOnRentApi(id: string): Promise<RentalRequestDto> {
+  const { data } = await rentClient().post<unknown>(`/rental-requests/${id}/contract`, {}, {
+    timeout: 120_000,
+  });
+  return mapRentalRequestFromApi(data as Record<string, unknown>);
+}
+
+/** Mevcut sözleşme PDF baytları (yalnızca oluşturulmuş taleplerde). */
+export async function fetchRentalRequestContractPdfBlob(id: string): Promise<Blob> {
+  const { data } = await rentClient().get<ArrayBuffer>(`/rental-requests/${id}/contract.pdf`, {
+    responseType: "arraybuffer",
+    timeout: 90_000,
+    headers: { Accept: "application/pdf" },
+  });
+  return new Blob([data], { type: "application/pdf" });
 }

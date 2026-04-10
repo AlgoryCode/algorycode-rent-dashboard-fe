@@ -1,4 +1,5 @@
 import type { CustomerInfo } from "@/lib/mock-fleet";
+import { publicAbsoluteUrl, resolvePublicAppOrigin } from "@/lib/config";
 
 export function buildRentalRequestUrl(origin: string, customer: CustomerInfo): string {
   const p = new URLSearchParams();
@@ -9,16 +10,19 @@ export function buildRentalRequestUrl(origin: string, customer: CustomerInfo): s
   if (customer.email) p.set("email", customer.email);
   if (customer.birthDate) p.set("birthDate", customer.birthDate);
   if (customer.driverLicenseNo) p.set("driverLicenseNo", customer.driverLicenseNo);
-  return `${origin.replace(/\/$/, "")}/talep?${p.toString()}`;
+  const base = resolvePublicAppOrigin(origin || undefined);
+  const q = p.toString();
+  if (!base) return q ? `/rental-request-form?${q}` : "/rental-request-form";
+  return `${base}/rental-request-form${q ? `?${q}` : ""}`;
 }
 
 export function buildRentalRequestMessage(customerName: string, requestUrl: string): string {
   return `Merhaba ${customerName}, yeni kiralama talebinizi bu bağlantıdan oluşturabilirsiniz: ${requestUrl}`;
 }
 
-/** Boş talep formu (ön doldurma yok); müşteri yalnızca bu sayfada kalacak şekilde kilitlenir. */
-export function buildEmptyTalepFormUrl(_origin: string): string {
-  return "https://rent.algorycode.com/talep/p";
+/** Paylaşılan talep formu kökü (ön doldurma yok); aynı sayfa `/rental-request-form`. */
+export function buildEmptyTalepFormUrl(origin: string): string {
+  return publicAbsoluteUrl("/rental-request-form", origin || undefined);
 }
 
 export function buildEmptyTalepFormMessage(customerName: string, formUrl: string): string {

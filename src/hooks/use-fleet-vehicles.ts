@@ -5,13 +5,16 @@ import { useMemo } from "react";
 import { rentKeys } from "@/lib/rent-query-keys";
 import {
   createVehicleOnRentApi,
+  deleteVehicleImageSlotOnRentApi,
   deleteVehicleOnRentApi,
   fetchVehiclesFromRentApi,
   getRentApiErrorMessage,
+  replaceVehicleImageSlotOnRentApi,
   updateVehicleOnRentApi,
   type CreateVehiclePayload,
   type UpdateVehiclePayload,
 } from "@/lib/rent-api";
+import type { VehicleImageSlot } from "@/lib/vehicle-images";
 
 export function useFleetVehicles() {
   const qc = useQueryClient();
@@ -42,6 +45,21 @@ export function useFleetVehicles() {
     },
   });
 
+  const replaceImageMutation = useMutation({
+    mutationFn: ({ id, slot, image }: { id: string; slot: VehicleImageSlot; image: string }) =>
+      replaceVehicleImageSlotOnRentApi(id, slot, image),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: rentKeys.vehicles() });
+    },
+  });
+
+  const deleteImageMutation = useMutation({
+    mutationFn: ({ id, slot }: { id: string; slot: VehicleImageSlot }) => deleteVehicleImageSlotOnRentApi(id, slot),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: rentKeys.vehicles() });
+    },
+  });
+
   const allVehicles = useMemo(() => vehicles, [vehicles]);
 
   return {
@@ -49,6 +67,9 @@ export function useFleetVehicles() {
     addVehicle: addMutation.mutateAsync.bind(addMutation),
     updateVehicle: (id: string, payload: UpdateVehiclePayload) => updateMutation.mutateAsync({ id, payload }),
     deleteVehicle: deleteMutation.mutateAsync.bind(deleteMutation),
+    replaceVehicleImageSlot: (id: string, slot: VehicleImageSlot, image: string) =>
+      replaceImageMutation.mutateAsync({ id, slot, image }),
+    deleteVehicleImageSlot: (id: string, slot: VehicleImageSlot) => deleteImageMutation.mutateAsync({ id, slot }),
     ready: !isPending,
     /** İlk yükleme bitti; arka planda sessiz yenileme olabilir */
     isRefreshing: isFetching && !isPending,

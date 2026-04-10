@@ -73,7 +73,7 @@ export function VehicleImageSlotsEditor({ value, onChange }: Props) {
       <div>
         <Label className="text-xs font-medium">Araç görselleri</Label>
         <p className="text-[10px] text-muted-foreground">
-          Ön, arka, yanlar ve iç mekân. Küçük önizleme; × ile kaldırın veya yeniden yükleyin (kamera veya galeri).
+          Ön, arka, sol, sağ, kokpit ve arka koltuk görselleri zorunlu. Küçük önizleme; × ile kaldırın veya yeniden yükleyin.
         </p>
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">

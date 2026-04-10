@@ -67,7 +67,7 @@ export function CustomersChannelClient() {
   const clearSelection = () => setSelectedKeys(new Set());
 
   const requestUrlFor = (customer: (typeof selectedRows)[number]["customer"]) => {
-    if (typeof window === "undefined") return "/talep";
+    if (typeof window === "undefined") return "/rental-request-form";
     return buildRentalRequestUrl(window.location.origin, customer);
   };
 

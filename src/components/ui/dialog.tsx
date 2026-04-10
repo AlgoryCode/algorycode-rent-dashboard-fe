@@ -39,8 +39,8 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-3 top-3 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1">
-        <X className="h-4 w-4" />
+      <DialogPrimitive.Close className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-md border border-border/80 bg-muted/50 text-foreground opacity-90 shadow-sm ring-offset-background transition-colors hover:bg-muted hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-1">
+        <X className="h-4 w-4 shrink-0" />
         <span className="sr-only">Kapat</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
@@ -49,7 +49,7 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col space-y-1 pr-6", className)} {...props} />
+  <div className={cn("flex flex-col space-y-1 pr-12 sm:pr-14", className)} {...props} />
 );
 DialogHeader.displayName = "DialogHeader";
 

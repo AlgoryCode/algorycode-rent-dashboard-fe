@@ -4,26 +4,38 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { differenceInCalendarDays, parseISO } from "date-fns";
-import { AlertTriangle, ImageIcon, MessageSquare, Save } from "lucide-react";
+import { AlertTriangle, ImageIcon, MessageSquare, Save, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
+import { CustomerPickerDialog } from "@/components/customers/customer-picker-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useCustomerDirectoryRows } from "@/hooks/use-customer-directory-rows";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
 import { useFleetVehicles } from "@/hooks/use-fleet-vehicles";
-import { fetchRentalByIdFromRentApi, getRentApiErrorMessage } from "@/lib/rent-api";
+import { fetchRentalByIdFromRentApi, getRentApiErrorMessage, type UpdateRentalPayload } from "@/lib/rent-api";
 import { rentKeys } from "@/lib/rent-query-keys";
+import { customerRecordKey, type CustomerAggregateRow } from "@/lib/rental-metadata";
+import type { RentalSession } from "@/lib/mock-fleet";
 
 type Props = { rentalId: string };
 
+function customerSnapshotIncomplete(c: RentalSession["customer"]): boolean {
+  return !c.fullName?.trim() || !c.phone?.trim();
+}
+
 export function RentalDetailClient({ rentalId }: Props) {
-  const { updateRental } = useFleetSessions();
+  const { updateRental, allSessions } = useFleetSessions();
   const { allVehicles } = useFleetVehicles();
+  const directoryRows = useCustomerDirectoryRows(allSessions);
   const [saving, setSaving] = useState(false);
+  const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
+  /** Listeden atanan veya değiştirilen belge URL’leri kayıtta gönderilsin */
+  const [customerDocsDirty, setCustomerDocsDirty] = useState(false);
 
   const { data: rental, isPending, error, refetch } = useQuery({
     queryKey: rentKeys.rental(rentalId),
@@ -36,6 +48,13 @@ export function RentalDetailClient({ rentalId }: Props) {
   const [endDate, setEndDate] = useState("");
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [nationalId, setNationalId] = useState("");
+  const [passportNo, setPassportNo] = useState("");
+  const [email, setEmail] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [driverLicenseNo, setDriverLicenseNo] = useState("");
+  const [passportImageDataUrl, setPassportImageDataUrl] = useState("");
+  const [driverLicenseImageDataUrl, setDriverLicenseImageDataUrl] = useState("");
   const [status, setStatus] = useState<"active" | "pending" | "completed" | "cancelled">("active");
 
   const rentalAmount = useMemo(() => {
@@ -53,24 +72,89 @@ export function RentalDetailClient({ rentalId }: Props) {
     return Object.values(vehicle.images).filter((v): v is string => typeof v === "string" && v.length > 0);
   }, [vehicle?.images]);
 
+  const missingCustomer = rental ? customerSnapshotIncomplete(rental.customer) : false;
+
+  const customerProfileHref = useMemo(() => {
+    const key = customerRecordKey({
+      fullName,
+      nationalId,
+      passportNo,
+      phone,
+      email: email || undefined,
+      birthDate: birthDate || undefined,
+      driverLicenseNo: driverLicenseNo || undefined,
+      passportImageDataUrl: passportImageDataUrl || undefined,
+      driverLicenseImageDataUrl: driverLicenseImageDataUrl || undefined,
+    });
+    return `/customers/${encodeURIComponent(key)}`;
+  }, [fullName, nationalId, passportNo, phone, email, birthDate, driverLicenseNo, passportImageDataUrl, driverLicenseImageDataUrl]);
+
   useEffect(() => {
     if (!rental) return;
     setStartDate(rental.startDate);
     setEndDate(rental.endDate);
     setFullName(rental.customer.fullName);
     setPhone(rental.customer.phone);
+    setNationalId(rental.customer.nationalId ?? "");
+    setPassportNo(rental.customer.passportNo ?? "");
+    setEmail(rental.customer.email ?? "");
+    setBirthDate(String(rental.customer.birthDate ?? "").slice(0, 10));
+    setDriverLicenseNo(rental.customer.driverLicenseNo ?? "");
+    setPassportImageDataUrl(rental.customer.passportImageDataUrl ?? "");
+    setDriverLicenseImageDataUrl(rental.customer.driverLicenseImageDataUrl ?? "");
     setStatus((rental.status as "active" | "pending" | "completed" | "cancelled") ?? "active");
+    setCustomerDocsDirty(false);
   }, [rental]);
+
+  const applyCustomerFromDirectory = (row: CustomerAggregateRow) => {
+    const c = row.customer;
+    setFullName(c.fullName);
+    setPhone(c.phone);
+    setNationalId((c.nationalId ?? "").trim());
+    setPassportNo((c.passportNo ?? "").trim());
+    setEmail((c.email ?? "").trim());
+    setBirthDate((c.birthDate ?? "").trim().slice(0, 10));
+    setDriverLicenseNo((c.driverLicenseNo ?? "").trim());
+    setPassportImageDataUrl((c.passportImageDataUrl ?? "").trim());
+    setDriverLicenseImageDataUrl((c.driverLicenseImageDataUrl ?? "").trim());
+    setCustomerDocsDirty(true);
+    toast.success(`${c.fullName} bu kiralamaya atandı (kaydet ile onaylayın).`);
+  };
 
   const save = async () => {
     if (!rental) return;
+    if (!fullName.trim() || !phone.trim()) {
+      toast.error("Müşteri adı ve telefon zorunludur.");
+      return;
+    }
+    if (!passportNo.trim()) {
+      toast.error("Pasaport no zorunludur.");
+      return;
+    }
     setSaving(true);
     try {
+      const customerPayload: NonNullable<UpdateRentalPayload["customer"]> = {
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        nationalId: nationalId.trim() || undefined,
+        passportNo: passportNo.trim(),
+        email: email.trim() || undefined,
+        birthDate: birthDate.trim() || undefined,
+        driverLicenseNo: driverLicenseNo.trim() || undefined,
+      };
+      if (customerDocsDirty) {
+        if (passportImageDataUrl.trim()) {
+          customerPayload.passportImageDataUrl = passportImageDataUrl.trim();
+        }
+        if (driverLicenseImageDataUrl.trim()) {
+          customerPayload.driverLicenseImageDataUrl = driverLicenseImageDataUrl.trim();
+        }
+      }
       await updateRental(rental.id, {
         startDate,
         endDate,
         status,
-        customer: { fullName, phone },
+        customer: customerPayload,
       });
       await refetch();
       toast.success("Kiralama güncellendi.");
@@ -126,6 +210,25 @@ export function RentalDetailClient({ rentalId }: Props) {
                 </div>
               </div>
 
+              {missingCustomer && (
+                <div className="flex flex-col gap-2 rounded-md border border-amber-500/35 bg-amber-500/10 p-3 text-xs">
+                  <p className="font-medium text-amber-950 dark:text-amber-100">Müşteri bilgisi eksik</p>
+                  <p className="text-muted-foreground">
+                    Bu kiralamada ad veya telefon yok. Kayıtlı müşteri listesinden seçerek doldurun veya aşağıdan elle girin.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="default"
+                    className="h-8 w-full gap-1.5 text-xs sm:w-fit"
+                    onClick={() => setCustomerPickerOpen(true)}
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    Müşteri ata
+                  </Button>
+                </div>
+              )}
+
               <div className="grid gap-2 sm:grid-cols-2">
                 <div className="space-y-1">
                   <Label className="text-xs">Başlangıç</Label>
@@ -135,13 +238,46 @@ export function RentalDetailClient({ rentalId }: Props) {
                   <Label className="text-xs">Bitiş</Label>
                   <Input type="date" className="h-9 text-sm" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
                 </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <Label className="text-xs">Müşteri</Label>
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setCustomerPickerOpen(true)}>
+                        Kayıtlı müşteri seç
+                      </Button>
+                      <Button asChild variant="ghost" size="sm" className="h-7 text-xs">
+                        <Link href={customerProfileHref}>Müşteri özeti</Link>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
                 <div className="space-y-1">
-                  <Label className="text-xs">Müşteri adı</Label>
+                  <Label className="text-xs">Ad soyad</Label>
                   <Input className="h-9 text-sm" value={fullName} onChange={(e) => setFullName(e.target.value)} />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Telefon</Label>
                   <Input className="h-9 text-sm" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">TC / kimlik no</Label>
+                  <Input className="h-9 text-sm" value={nationalId} onChange={(e) => setNationalId(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Pasaport no</Label>
+                  <Input className="h-9 text-sm" value={passportNo} onChange={(e) => setPassportNo(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">E-posta</Label>
+                  <Input type="email" className="h-9 text-sm" value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Doğum tarihi</Label>
+                  <Input type="date" className="h-9 text-sm" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} />
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs">Ehliyet no</Label>
+                  <Input className="h-9 text-sm" value={driverLicenseNo} onChange={(e) => setDriverLicenseNo(e.target.value)} />
                 </div>
                 <div className="space-y-1 sm:col-span-2">
                   <Label className="text-xs">Durum</Label>
@@ -250,6 +386,15 @@ export function RentalDetailClient({ rentalId }: Props) {
           )}
         </CardContent>
       </Card>
+
+      <CustomerPickerDialog
+        open={customerPickerOpen}
+        onOpenChange={setCustomerPickerOpen}
+        rows={directoryRows}
+        onPick={applyCustomerFromDirectory}
+        title="Kayıtlı müşteri seç"
+        description="Listeden müşteriyi seçin; bilgiler forma yazılır. Ardından «Değişiklikleri kaydet» ile kiralamaya uygulayın."
+      />
     </div>
   );
 }
