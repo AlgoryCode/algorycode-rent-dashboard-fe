@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCustomerDirectoryRows } from "@/hooks/use-customer-directory-rows";
+import { useCustomerRecordStates } from "@/hooks/use-customer-record-states";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
 import { useFleetVehicles } from "@/hooks/use-fleet-vehicles";
 import { fetchRentalByIdFromRentApi, getRentApiErrorMessage, type UpdateRentalPayload } from "@/lib/rent-api";
@@ -31,7 +32,8 @@ function customerSnapshotIncomplete(c: RentalSession["customer"]): boolean {
 export function RentalDetailClient({ rentalId }: Props) {
   const { updateRental, allSessions } = useFleetSessions();
   const { allVehicles } = useFleetVehicles();
-  const directoryRows = useCustomerDirectoryRows(allSessions);
+  const { data: customerRecordStates } = useCustomerRecordStates();
+  const directoryRows = useCustomerDirectoryRows(allSessions, customerRecordStates);
   const [saving, setSaving] = useState(false);
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   /** Listeden atanan veya değiştirilen belge URL’leri kayıtta gönderilsin */

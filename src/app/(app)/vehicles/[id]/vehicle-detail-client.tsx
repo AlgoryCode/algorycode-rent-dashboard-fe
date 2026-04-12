@@ -60,6 +60,7 @@ import {
 import type { CustomerKind, Vehicle } from "@/lib/mock-fleet";
 import { CustomerPickerDialog } from "@/components/customers/customer-picker-dialog";
 import { useCustomerDirectoryRows } from "@/hooks/use-customer-directory-rows";
+import { useCustomerRecordStates } from "@/hooks/use-customer-record-states";
 import { addManualCustomer } from "@/lib/manual-customers";
 import { splitPhoneToCountryAndLocal } from "@/lib/customer-phone-split";
 import { sessionCreatedAt, type CustomerAggregateRow } from "@/lib/rental-metadata";
@@ -111,7 +112,8 @@ function fileToDataUrl(file: File): Promise<string> {
 export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props) {
   const router = useRouter();
   const { allSessions, createRental } = useFleetSessions();
-  const customerDirectoryRows = useCustomerDirectoryRows(allSessions);
+  const { data: customerRecordStates } = useCustomerRecordStates();
+  const customerDirectoryRows = useCustomerDirectoryRows(allSessions, customerRecordStates);
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const { updateVehicle, deleteVehicle } = useFleetVehicles();
   const { countryByCode, countries } = useCountries();

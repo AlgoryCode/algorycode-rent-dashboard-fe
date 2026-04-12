@@ -1,16 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
-import { Search, UserCog } from "lucide-react";
+import { ChevronRight, Search, UserCog } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { PanelUser, PanelUserRole } from "@/lib/mock-users";
+import type { PanelUserRole } from "@/lib/mock-users";
 import { ROLE_LABEL } from "@/lib/mock-users";
 import { rentKeys } from "@/lib/rent-query-keys";
 import { fetchPanelUsersFromRentApi, getRentApiErrorMessage } from "@/lib/rent-api";
@@ -66,7 +68,8 @@ export function UsersClient() {
           Kullanıcılar
         </h1>
         <p className="text-xs text-muted-foreground">
-          Panel kullanıcıları rent API’den gelir. Giriş / oturum hâlâ AuthService üzerindedir.
+          Panel kullanıcıları rent API’den gelir. Silmek için satırdan detaya gidin; en altta <span className="font-medium text-foreground">Tehlikeli bölge</span>{" "}
+          kullanılır. Giriş / oturum hâlâ AuthService üzerindedir.
         </p>
       </div>
 
@@ -116,6 +119,7 @@ export function UsersClient() {
                       <th className="px-3 py-2.5">Rol</th>
                       <th className="px-3 py-2.5">Durum</th>
                       <th className="px-3 py-2.5">Son aktivite</th>
+                      <th className="w-[100px] px-3 py-2.5 text-right text-[10px]">Detay</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -144,6 +148,14 @@ export function UsersClient() {
                         </td>
                         <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-muted-foreground">
                           {format(parseISO(u.lastActiveAt), "d MMM yyyy HH:mm", { locale: tr })}
+                        </td>
+                        <td className="px-3 py-2.5 text-right">
+                          <Button asChild variant="outline" size="sm" className="h-8 gap-1 text-xs">
+                            <Link href={`/users/${encodeURIComponent(u.id)}`}>
+                              Detay
+                              <ChevronRight className="h-3.5 w-3.5 opacity-70" />
+                            </Link>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -176,6 +188,12 @@ export function UsersClient() {
                       <span className="text-[10px] text-muted-foreground">
                         {format(parseISO(u.lastActiveAt), "d MMM yyyy HH:mm", { locale: tr })}
                       </span>
+                      <Button asChild variant="outline" size="sm" className="ml-auto h-8 gap-1 text-xs">
+                        <Link href={`/users/${encodeURIComponent(u.id)}`}>
+                          Detay
+                          <ChevronRight className="h-3.5 w-3.5 opacity-70" />
+                        </Link>
+                      </Button>
                     </div>
                   </li>
                 ))}

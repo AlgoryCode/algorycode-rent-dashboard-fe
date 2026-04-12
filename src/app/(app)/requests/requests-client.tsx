@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCustomerDirectoryRows } from "@/hooks/use-customer-directory-rows";
+import { useCustomerRecordStates } from "@/hooks/use-customer-record-states";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
 import {
   buildEmptyTalepFormMessage,
@@ -64,7 +65,8 @@ type SendWizardStep =
 export function RequestsClient() {
   const qc = useQueryClient();
   const { allSessions } = useFleetSessions();
-  const directoryRows = useCustomerDirectoryRows(allSessions);
+  const { data: customerRecordStates } = useCustomerRecordStates();
+  const directoryRows = useCustomerDirectoryRows(allSessions, customerRecordStates);
 
   const [statusMessage, setStatusMessage] = useState("");
   const [sendDialogOpen, setSendDialogOpen] = useState(false);

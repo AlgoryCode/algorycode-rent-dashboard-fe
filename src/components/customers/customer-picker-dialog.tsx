@@ -80,11 +80,15 @@ export function CustomerPickerDialog({
                 <li key={row.key}>
                   <button
                     type="button"
+                    disabled={!row.recordActive}
+                    title={!row.recordActive ? "Pasif müşteri seçilemez" : undefined}
                     className={cn(
                       "w-full px-3 py-2.5 text-left text-xs transition-colors hover:bg-muted/60",
                       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      !row.recordActive && "cursor-not-allowed opacity-50 hover:bg-transparent",
                     )}
                     onClick={() => {
+                      if (!row.recordActive) return;
                       onPick(row);
                       onOpenChange(false);
                       setQ("");
@@ -95,6 +99,11 @@ export function CustomerPickerDialog({
                       <Badge variant="outline" className="h-5 px-1.5 text-[9px] font-normal">
                         {resolveCustomerKind(row.customer) === "corporate" ? "Kurumsal" : "Bireysel"}
                       </Badge>
+                      {!row.recordActive && (
+                        <Badge variant="muted" className="h-5 px-1.5 text-[9px] font-normal">
+                          Pasif
+                        </Badge>
+                      )}
                     </span>
                     <span className="mt-0.5 block text-[11px] text-muted-foreground">{row.customer.phone}</span>
                     {(row.customer.nationalId || row.customer.passportNo) && (

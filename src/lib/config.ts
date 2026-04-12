@@ -1,26 +1,22 @@
-export const AUTH_BASE =
-  process.env.AUTH_BASE ||
-  process.env.NEXT_PUBLIC_AUTH_BASE ||
-  "https://auth.algorycode.com";
+import { getAuthApiRoot, getRentApiRoot } from "@/lib/api-base";
+
+/** Auth upstream kökü (`api-base` + `AUTH_BASE` / `NEXT_PUBLIC_AUTH_BASE` önceliği). */
+export const AUTH_BASE = getAuthApiRoot();
 
 /**
  * Rent API kök URL (sonunda / yok). Tüm filo/kiralama/ödeme/kullanıcı istekleri buraya gider.
  *
- * - `next dev`: `NEXT_PUBLIC_RENT_API_BASE` boşsa `http://localhost:8090`.
+ * - `next dev`: `NEXT_PUBLIC_RENT_API_BASE` boşsa `getRentApiRoot()` (`NEXT_PUBLIC_API_BASE_MODE`).
  * - Varsayılan prod: `/api/rent` (BFF proxy).
- * - Prod, doğrudan tarayıcı → API: tam URL (örn. `https://rental.algorycode.com`).
- * - Prod, BFF proxy: `NEXT_PUBLIC_RENT_API_BASE=/api/rent`. Sunucu hedefi için isteğe bağlı
- *   `RENT_API_UPSTREAM`; yoksa `https://rental.algorycode.com` kullanılır.
- *
- * Şablon: `.env.local.example` → `.env.local`. Farklı bir API host’unuz varsa hosting’de
- * `RENT_API_UPSTREAM` verin.
+ * - Prod, doğrudan tarayıcı → API: tam URL (örn. gateway `…/rent` veya `https://rental.…`).
+ * - BFF upstream: `RENT_API_UPSTREAM` veya `api-base` modları (`src/lib/api-base.ts`).
  */
 const PROD_RENT_API_DEFAULT = "/api/rent";
 
 export const RENT_API_BASE = (() => {
   const v = process.env.NEXT_PUBLIC_RENT_API_BASE?.trim();
   if (v) return v.replace(/\/$/, "");
-  if (process.env.NODE_ENV === "development") return "http://localhost:8090";
+  if (process.env.NODE_ENV === "development") return getRentApiRoot();
   return PROD_RENT_API_DEFAULT;
 })();
 

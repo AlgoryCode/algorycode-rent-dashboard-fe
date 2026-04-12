@@ -432,6 +432,10 @@ export async function fetchPanelUsersFromRentApi(): Promise<PanelUser[]> {
   return data.map((row) => mapPanelUserFromApi(row as Record<string, unknown>));
 }
 
+export async function deletePanelUserOnRentApi(id: string): Promise<void> {
+  await rentClient().delete(`/panel-users/${encodeURIComponent(id)}`);
+}
+
 export async function fetchCountriesFromRentApi(): Promise<CountryRow[]> {
   const { data } = await rentClient().get<unknown[]>("/countries");
   if (!Array.isArray(data)) return [];
@@ -673,4 +677,49 @@ export async function fetchRentalRequestContractPdfBlob(id: string): Promise<Blo
     headers: { Accept: "application/pdf" },
   });
   return new Blob([data], { type: "application/pdf" });
+}
+
+export type CustomerRecordStatePayload = {
+  recordKey: string;
+  active: boolean;
+};
+
+export type CustomerRecordDeletionPayload = {
+  deletedRentals: number;
+  deletedRentalRequests: number;
+};
+
+export async function fetchCustomerRecordStatesFromRentApi(): Promise<CustomerRecordStatePayload[]> {
+  const { data } = await rentClient().get<unknown>("/customer-records");
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      recordKey: String(r.recordKey ?? ""),
+      active: Boolean(r.active),
+    };
+  });
+}
+
+export async function patchCustomerRecordActiveOnRentApi(
+  recordKey: string,
+  active: boolean,
+): Promise<CustomerRecordStatePayload> {
+  const enc = encodeURIComponent(recordKey);
+  const { data } = await rentClient().patch<unknown>(`/customer-records/${enc}`, { active });
+  const r = data as Record<string, unknown>;
+  return {
+    recordKey: String(r.recordKey ?? recordKey),
+    active: Boolean(r.active),
+  };
+}
+
+export async function deleteCustomerRecordOnRentApi(recordKey: string): Promise<CustomerRecordDeletionPayload> {
+  const enc = encodeURIComponent(recordKey);
+  const { data } = await rentClient().delete<unknown>(`/customer-records/${enc}`);
+  const r = data as Record<string, unknown>;
+  return {
+    deletedRentals: Number(r.deletedRentals ?? 0),
+    deletedRentalRequests: Number(r.deletedRentalRequests ?? 0),
+  };
 }

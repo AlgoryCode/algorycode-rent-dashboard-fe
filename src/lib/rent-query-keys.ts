@@ -8,4 +8,5 @@ export const rentKeys = {
   countries: () => [...rentKeys.all, "countries"] as const,
   payments: () => [...rentKeys.all, "payments"] as const,
   panelUsers: () => [...rentKeys.all, "panelUsers"] as const,
+  customerRecords: () => [...rentKeys.all, "customerRecords"] as const,
 };

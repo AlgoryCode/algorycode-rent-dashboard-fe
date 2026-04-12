@@ -4,7 +4,7 @@ import { resolveRentApiUpstreamUrl } from "@/lib/rent-api-upstream.server";
 
 /**
  * Rent API BFF: tarayıcı → `/api/rent/...` → sunucuda upstream’e iletilir.
- * `RENT_API_UPSTREAM` tanımlı değilse varsayılan `https://rent.algorycode.com` kullanılır.
+ * Upstream: `RENT_API_UPSTREAM` veya `resolveRentApiUpstreamUrl()` (`api-base`).
  */
 
 function forwardRequestHeaders(req: NextRequest): Headers {

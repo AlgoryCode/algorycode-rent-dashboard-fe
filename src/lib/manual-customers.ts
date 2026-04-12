@@ -40,6 +40,7 @@ export function loadManualCustomerRows(): CustomerAggregateRow[] {
     rentals: [],
     totalRentals: 0,
     lastActivity: m.createdAt,
+    recordActive: true,
   }));
 }
 
@@ -62,4 +63,21 @@ export function addManualCustomer(customer: CustomerInfo): ManualCustomerStored 
   rows.push(row);
   writeRaw(rows);
   return row;
+}
+
+export function updateManualCustomer(key: string, customer: CustomerInfo): boolean {
+  const rows = readRaw();
+  const i = rows.findIndex((m) => m.key === key);
+  if (i < 0) return false;
+  rows[i] = { ...rows[i], customer: { ...rows[i].customer, ...customer } };
+  writeRaw(rows);
+  return true;
+}
+
+export function deleteManualCustomer(key: string): boolean {
+  const rows = readRaw();
+  const next = rows.filter((m) => m.key !== key);
+  if (next.length === rows.length) return false;
+  writeRaw(next);
+  return true;
 }

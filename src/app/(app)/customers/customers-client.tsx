@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
-import { Building2, Plus, Search, User, Users } from "lucide-react";
+import { Building2, Pencil, Plus, Search, User, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -23,9 +24,21 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
-import { addManualCustomer, loadManualCustomerRows, mergeSessionAndManualCustomers } from "@/lib/manual-customers";
+import {
+  addManualCustomer,
+  findManualCustomer,
+  loadManualCustomerRows,
+  mergeSessionAndManualCustomers,
+  updateManualCustomer,
+} from "@/lib/manual-customers";
 import type { CustomerKind } from "@/lib/mock-fleet";
-import { aggregateCustomersFromSessions, resolveCustomerKind } from "@/lib/rental-metadata";
+import {
+  aggregateCustomersFromSessions,
+  mergeCustomerDirectoryStates,
+  resolveCustomerKind,
+} from "@/lib/rental-metadata";
+import { fetchCustomerRecordStatesFromRentApi } from "@/lib/rent-api";
+import { rentKeys } from "@/lib/rent-query-keys";
 import { cn } from "@/lib/utils";
 
 type KindTab = "all" | CustomerKind;
@@ -44,18 +57,27 @@ const defaultNewForm = {
 export function CustomersClient() {
   const router = useRouter();
   const { allSessions } = useFleetSessions();
+  const { data: customerRecordStates } = useQuery({
+    queryKey: rentKeys.customerRecords(),
+    queryFn: fetchCustomerRecordStatesFromRentApi,
+    staleTime: 20_000,
+  });
   const [query, setQuery] = useState("");
   const [kindTab, setKindTab] = useState<KindTab>("all");
   const [newOpen, setNewOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editKey, setEditKey] = useState<string | null>(null);
   const [manualTick, setManualTick] = useState(0);
   const [nf, setNf] = useState(defaultNewForm);
+  const [ef, setEf] = useState(defaultNewForm);
 
   const rows = useMemo(() => {
     void manualTick;
     const sessionRows = aggregateCustomersFromSessions(allSessions);
     const manualRows = loadManualCustomerRows();
-    return mergeSessionAndManualCustomers(sessionRows, manualRows);
-  }, [allSessions, manualTick]);
+    const merged = mergeSessionAndManualCustomers(sessionRows, manualRows);
+    return mergeCustomerDirectoryStates(merged, customerRecordStates);
+  }, [allSessions, manualTick, customerRecordStates]);
 
   const rowsByKind = useMemo(() => {
     if (kindTab === "all") return rows;
@@ -96,6 +118,53 @@ export function CustomersClient() {
     setManualTick((t) => t + 1);
   };
 
+  const openEditDialog = (key: string) => {
+    const m = findManualCustomer(key);
+    if (!m) {
+      toast.error("Manuel müşteri bulunamadı.");
+      return;
+    }
+    const c = m.customer;
+    setEditKey(key);
+    setEf({
+      fullName: c.fullName,
+      phone: c.phone,
+      email: c.email ?? "",
+      nationalId: c.nationalId ?? "",
+      passportNo: c.passportNo ?? "",
+      birthDate: (c.birthDate ?? "").slice(0, 10),
+      driverLicenseNo: c.driverLicenseNo ?? "",
+      kind: c.kind === "corporate" ? "corporate" : "individual",
+    });
+    setEditOpen(true);
+  };
+
+  const submitEditCustomer = () => {
+    if (!editKey) return;
+    if (!ef.fullName.trim() || !ef.phone.trim()) {
+      toast.error("Ad soyad ve telefon zorunludur.");
+      return;
+    }
+    const ok = updateManualCustomer(editKey, {
+      fullName: ef.fullName.trim(),
+      phone: ef.phone.trim(),
+      email: ef.email.trim() || undefined,
+      nationalId: ef.nationalId.trim() || "",
+      passportNo: ef.passportNo.trim() || "",
+      birthDate: ef.birthDate.trim() || undefined,
+      driverLicenseNo: ef.driverLicenseNo.trim() || undefined,
+      kind: ef.kind,
+    });
+    if (!ok) {
+      toast.error("Güncelleme başarısız.");
+      return;
+    }
+    toast.success("Müşteri güncellendi.");
+    setEditOpen(false);
+    setEditKey(null);
+    setManualTick((t) => t + 1);
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div>
@@ -104,7 +173,7 @@ export function CustomersClient() {
           Müşteriler
         </h1>
         <p className="text-xs text-muted-foreground">
-          Kiralama geçmişinden türetilen kayıtlar ve manuel eklenenler. Bireysel / kurumsal sekmeleriyle süzün.
+          Kiralama geçmişinden türetilen kayıtlar ve manuel eklenenler. Silme ve pasif durum sunucuda uygulanır; detay sayfasından yönetilir.
         </p>
       </div>
 
@@ -202,6 +271,96 @@ export function CustomersClient() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">Müşteriyi düzenle</DialogTitle>
+            <DialogDescription className="text-xs">
+              Yalnızca tarayıcıda saklanan manuel kayıtlar düzenlenebilir.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Müşteri türü</Label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEf((s) => ({ ...s, kind: "individual" }))}
+                  className={cn(
+                    "flex min-h-[3.25rem] items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    ef.kind === "individual"
+                      ? "border-emerald-500/50 bg-emerald-500/10 dark:border-emerald-400/40"
+                      : "border-border/80 bg-muted/15 hover:bg-muted/30",
+                  )}
+                >
+                  <User className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  Bireysel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEf((s) => ({ ...s, kind: "corporate" }))}
+                  className={cn(
+                    "flex min-h-[3.25rem] items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-center text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    ef.kind === "corporate"
+                      ? "border-emerald-500/50 bg-emerald-500/10 dark:border-emerald-400/40"
+                      : "border-border/80 bg-muted/15 hover:bg-muted/30",
+                  )}
+                >
+                  <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  Kurumsal
+                </button>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">{ef.kind === "corporate" ? "Firma / unvan *" : "Ad soyad *"}</Label>
+                <Input
+                  className="h-9 text-sm"
+                  value={ef.fullName}
+                  onChange={(e) => setEf((s) => ({ ...s, fullName: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Telefon *</Label>
+                <Input className="h-9 text-sm" value={ef.phone} onChange={(e) => setEf((s) => ({ ...s, phone: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">E-posta</Label>
+                <Input className="h-9 text-sm" type="email" value={ef.email} onChange={(e) => setEf((s) => ({ ...s, email: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">TC / kimlik no</Label>
+                <Input className="h-9 text-sm" value={ef.nationalId} onChange={(e) => setEf((s) => ({ ...s, nationalId: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Pasaport no</Label>
+                <Input className="h-9 text-sm" value={ef.passportNo} onChange={(e) => setEf((s) => ({ ...s, passportNo: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Doğum tarihi</Label>
+                <Input className="h-9 text-sm" type="date" value={ef.birthDate} onChange={(e) => setEf((s) => ({ ...s, birthDate: e.target.value }))} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Ehliyet no</Label>
+                <Input
+                  className="h-9 text-sm"
+                  value={ef.driverLicenseNo}
+                  onChange={(e) => setEf((s) => ({ ...s, driverLicenseNo: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" size="sm" className="h-9 text-xs" onClick={() => setEditOpen(false)}>
+              Vazgeç
+            </Button>
+            <Button type="button" size="sm" className="h-9 text-xs" onClick={submitEditCustomer}>
+              Kaydet
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Tabs value={kindTab} onValueChange={(v) => setKindTab(v as KindTab)} className="w-full">
         <TabsList className="h-9 w-full justify-start gap-1 overflow-x-auto sm:w-auto">
           <TabsTrigger value="all" className="text-xs">
@@ -251,12 +410,13 @@ export function CustomersClient() {
                       <TableHead className="hidden h-9 text-xs md:table-cell">Telefon</TableHead>
                       <TableHead className="h-9 w-[52px] text-center text-xs">Kira</TableHead>
                       <TableHead className="hidden h-9 w-[130px] text-xs lg:table-cell">Son işlem</TableHead>
-                      <TableHead className="h-9 w-[110px] text-right text-xs">Detay</TableHead>
+                      <TableHead className="h-9 w-[120px] text-right text-xs">İşlem</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filtered.map((row) => {
                       const k = resolveCustomerKind(row.customer);
+                      const isManual = row.key.startsWith("manual:");
                       return (
                         <TableRow
                           key={row.key}
@@ -276,7 +436,16 @@ export function CustomersClient() {
                               {k === "corporate" ? "Kurumsal" : "Bireysel"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="py-2 text-sm font-medium">{row.customer.fullName}</TableCell>
+                          <TableCell className="py-2 text-sm font-medium">
+                            <span className="inline-flex flex-wrap items-center gap-1.5">
+                              {row.customer.fullName}
+                              {!row.recordActive && (
+                                <Badge variant="muted" className="text-[9px] font-normal">
+                                  Pasif
+                                </Badge>
+                              )}
+                            </span>
+                          </TableCell>
                           <TableCell className="hidden py-2 font-mono text-xs sm:table-cell">{row.customer.nationalId || "—"}</TableCell>
                           <TableCell className="hidden py-2 text-xs md:table-cell">{row.customer.phone}</TableCell>
                           <TableCell className="py-2 text-center">
@@ -288,18 +457,35 @@ export function CustomersClient() {
                             {format(parseISO(row.lastActivity), "d MMM yyyy HH:mm", { locale: tr })}
                           </TableCell>
                           <TableCell className="py-2 text-right">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/customers/${encodeURIComponent(row.key)}`);
-                              }}
-                            >
-                              Detay
-                            </Button>
+                            <div className="flex justify-end gap-1">
+                              {isManual && (
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  size="sm"
+                                  className="h-7 w-7 p-0"
+                                  title="Düzenle"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openEditDialog(row.key);
+                                  }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  router.push(`/customers/${encodeURIComponent(row.key)}`);
+                                }}
+                              >
+                                Detay
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       );

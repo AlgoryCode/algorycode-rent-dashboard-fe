@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Copy, Mail, MessageCircle, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -10,10 +11,17 @@ import { Input } from "@/components/ui/input";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
 import { buildRentalRequestMessage, buildRentalRequestUrl, normalizedPhoneForWhatsApp } from "@/lib/customer-contact";
 import { loadManualCustomerRows, mergeSessionAndManualCustomers } from "@/lib/manual-customers";
-import { aggregateCustomersFromSessions } from "@/lib/rental-metadata";
+import { aggregateCustomersFromSessions, mergeCustomerDirectoryStates } from "@/lib/rental-metadata";
+import { fetchCustomerRecordStatesFromRentApi } from "@/lib/rent-api";
+import { rentKeys } from "@/lib/rent-query-keys";
 
 export function CustomersChannelClient() {
   const { allSessions } = useFleetSessions();
+  const { data: customerRecordStates } = useQuery({
+    queryKey: rentKeys.customerRecords(),
+    queryFn: fetchCustomerRecordStatesFromRentApi,
+    staleTime: 20_000,
+  });
   const [query, setQuery] = useState("");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [customMessage, setCustomMessage] = useState("");
@@ -21,8 +29,9 @@ export function CustomersChannelClient() {
   const rows = useMemo(() => {
     const sessionRows = aggregateCustomersFromSessions(allSessions);
     const manualRows = loadManualCustomerRows();
-    return mergeSessionAndManualCustomers(sessionRows, manualRows);
-  }, [allSessions]);
+    const merged = mergeSessionAndManualCustomers(sessionRows, manualRows);
+    return mergeCustomerDirectoryStates(merged, customerRecordStates);
+  }, [allSessions, customerRecordStates]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -30,7 +39,7 @@ export function CustomersChannelClient() {
     return rows.filter(
       ({ customer }) =>
         customer.fullName.toLowerCase().includes(q) ||
-        customer.nationalId.toLowerCase().includes(q) ||
+        (customer.nationalId ?? "").toLowerCase().includes(q) ||
         customer.phone.toLowerCase().includes(q) ||
         customer.passportNo.toLowerCase().includes(q) ||
         (customer.email ?? "").toLowerCase().includes(q),

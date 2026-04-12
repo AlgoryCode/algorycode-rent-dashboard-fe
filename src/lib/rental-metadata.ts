@@ -1,3 +1,4 @@
+import type { CustomerRecordStatePayload } from "@/lib/rent-api";
 import type { CustomerInfo, CustomerKind, RentalSession, Vehicle } from "@/lib/mock-fleet";
 
 export type { CustomerKind };
@@ -45,7 +46,20 @@ export type CustomerAggregateRow = {
   rentals: RentalSession[];
   totalRentals: number;
   lastActivity: string;
+  /** Sunucu müşteri durumu; kayıt yoksa true. */
+  recordActive: boolean;
 };
+
+export function mergeCustomerDirectoryStates(
+  rows: CustomerAggregateRow[],
+  states?: CustomerRecordStatePayload[] | null,
+): CustomerAggregateRow[] {
+  if (!states?.length) {
+    return rows.map((r) => ({ ...r, recordActive: true }));
+  }
+  const m = new Map(states.map((s) => [s.recordKey, s.active]));
+  return rows.map((r) => ({ ...r, recordActive: m.get(r.key) ?? true }));
+}
 
 export function aggregateCustomersFromSessions(sessions: RentalSession[]): CustomerAggregateRow[] {
   const map = new Map<string, { customer: CustomerInfo; rentals: RentalSession[] }>();
@@ -69,6 +83,7 @@ export function aggregateCustomersFromSessions(sessions: RentalSession[]): Custo
       rentals: sorted,
       totalRentals: sorted.length,
       lastActivity,
+      recordActive: true,
     });
   }
 

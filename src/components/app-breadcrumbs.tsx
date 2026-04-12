@@ -77,6 +77,11 @@ function buildBreadcrumbs(
     return [{ label: "Müşteriler" }];
   }
 
+  const userDetail = path.match(/^\/users\/([^/]+)$/);
+  if (userDetail) {
+    return [{ label: "Kullanıcılar", href: "/users" }, { label: "Kullanıcı detayı" }];
+  }
+
   const staticLabels: Record<string, string> = {
     "/payments": "Ödemeler",
     "/reports": "Raporlar",
