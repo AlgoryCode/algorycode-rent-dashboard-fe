@@ -52,7 +52,7 @@ const SLOT_KEYS = new Set<string>(VEHICLE_IMAGE_SLOTS.map((s) => s.key));
 function rentClient() {
   if (!RENT_API_BASE) {
     throw new Error(
-      "NEXT_PUBLIC_RENT_API_BASE ayarlı değil. Üretim build’inde .env.production veya hosting ortam değişkeni ile kök API URL’ini verin (örn. https://gateway.algorycode.com/rent veya /api/rent).",
+      "RENT_API_BASE tanımsız (api-base / gateway kökü). NEXT_PUBLIC_GATEWAY_URL veya varsayılan gateway kullanılmalı.",
     );
   }
   const client = axios.create({
