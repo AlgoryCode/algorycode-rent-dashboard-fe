@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   BarChart3,
@@ -31,7 +31,9 @@ import { Sheet, SheetClose, SheetContent } from "@/components/ui/sheet";
 import { AppBreadcrumbs } from "@/components/app-breadcrumbs";
 import { ApiError } from "@/lib/api/errors";
 import { authService } from "@/lib/auth-service";
+import { hrefRequiresRentManager } from "@/lib/rbac/route-policy";
 import { cn } from "@/lib/utils";
+import { useRentFeRoles } from "@/hooks/useRentFeRoles";
 
 const nav = [
   { href: "/dashboard", label: "Hızlı menü", icon: LayoutDashboard },
@@ -76,16 +78,47 @@ function isNavActive(pathname: string, href: string) {
   return false;
 }
 
+function RentRbacToastInner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (searchParams.get("yetkisiz") !== "1") return;
+    toast.info("Bu sayfa için RENT_MANAGER veya RENT_ADMIN rolü gerekir.");
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("yetkisiz");
+    const q = next.toString();
+    router.replace(q ? `/dashboard?${q}` : "/dashboard", { scroll: false });
+  }, [searchParams, router]);
+
+  return null;
+}
+
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { hasManagerAccess } = useRentFeRoles();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [routeSearch, setRouteSearch] = useState("");
   const showTemplateActions = pathname !== "/dashboard";
 
+  const filteredDesktopNav = useMemo(
+    () => desktopNav.filter((item) => !hrefRequiresRentManager(item.href) || hasManagerAccess),
+    [hasManagerAccess],
+  );
+
+  const filteredNav = useMemo(
+    () => nav.filter((item) => !hrefRequiresRentManager(item.href) || hasManagerAccess),
+    [hasManagerAccess],
+  );
+
   const searchableRoutes = useMemo(
-    () => [...nav, ...extraSearchRoutes].map(({ href, label }) => ({ href, label })),
-    [],
+    () =>
+      [...filteredNav, ...extraSearchRoutes].map(({ href, label }) => ({
+        href,
+        label,
+      })),
+    [filteredNav],
   );
 
   const routeSearchResults = useMemo(() => {
@@ -184,6 +217,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen w-full bg-background">
+      <Suspense fallback={null}>
+        <RentRbacToastInner />
+      </Suspense>
       <aside className="hidden w-52 shrink-0 flex-col border-r border-border bg-card/50 sm:flex">
         <Link href="/dashboard" className="flex h-12 items-center gap-2 border-b border-border px-4 hover:bg-muted/50">
           <CarFront className="h-5 w-5 shrink-0 text-primary" />
@@ -193,7 +229,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </Link>
         <nav className="flex flex-col gap-0.5 p-2">
-          {desktopNav.map(({ href, label, icon: Icon }) => {
+          {filteredDesktopNav.map(({ href, label, icon: Icon }) => {
             const active = isNavActive(pathname, href);
             return (
               <Link
@@ -236,7 +272,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               </div>
 
               <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain p-2">
-                {nav.map(({ href, label, icon: Icon }) => {
+                {filteredNav.map(({ href, label, icon: Icon }) => {
                   const active = isNavActive(pathname, href);
                   return (
                     <SheetClose key={href} asChild>

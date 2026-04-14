@@ -1,17 +1,28 @@
 "use client";
 
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import { tr } from "date-fns/locale";
-import { ChevronRight, Search, UserCog } from "lucide-react";
+import { ChevronRight, Search, UserCog, UserPlus } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useRentFeRoles } from "@/hooks/useRentFeRoles";
+import { registerPanelUser } from "@/lib/auth-register";
 import type { PanelUserRole } from "@/lib/mock-users";
 import { ROLE_LABEL } from "@/lib/mock-users";
 import { rentKeys } from "@/lib/rent-query-keys";
@@ -31,8 +42,18 @@ function roleBadgeVariant(role: PanelUserRole): "default" | "secondary" | "outli
 }
 
 export function UsersClient() {
+  const { hasManagerAccess } = useRentFeRoles();
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const [activeOnly, setActiveOnly] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [addSubmitting, setAddSubmitting] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const {
     data: sourceList = [],
@@ -60,18 +81,126 @@ export function UsersClient() {
     return list;
   }, [query, activeOnly, sourceList]);
 
+  const resetAddForm = () => {
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setPhone("");
+    setPassword("");
+    setAddError(null);
+  };
+
+  const onAddUser = async () => {
+    setAddError(null);
+    const fn = firstName.trim();
+    const ln = lastName.trim();
+    const em = email.trim();
+    const ph = phone.trim();
+    if (!fn || !ln) {
+      setAddError("Ad ve soyad zorunludur.");
+      return;
+    }
+    if (!em) {
+      setAddError("E-posta zorunludur.");
+      return;
+    }
+    if (!password || password.length < 6) {
+      setAddError("Şifre en az 6 karakter olmalıdır.");
+      return;
+    }
+    setAddSubmitting(true);
+    try {
+      await registerPanelUser({
+        firstName: fn,
+        lastName: ln,
+        email: em,
+        password,
+        phoneNumber: ph || undefined,
+      });
+      toast.success("Kullanıcı oluşturuldu (AuthService, rol: RENT_USER).");
+      resetAddForm();
+      setAddOpen(false);
+      await queryClient.invalidateQueries({ queryKey: rentKeys.panelUsers() });
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : "Kayıt başarısız.");
+    } finally {
+      setAddSubmitting(false);
+    }
+  };
+
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <div>
-        <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <UserCog className="h-5 w-5 text-primary" />
-          Kullanıcılar
-        </h1>
-        <p className="text-xs text-muted-foreground">
-          Panel kullanıcıları rent API’den gelir. Silmek için satırdan detaya gidin; en altta <span className="font-medium text-foreground">Tehlikeli bölge</span>{" "}
-          kullanılır. Giriş / oturum hâlâ AuthService üzerindedir.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <UserCog className="h-5 w-5 text-primary" />
+            Kullanıcılar
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Panel kullanıcıları rent API’den gelir. Yeni kayıtlar AuthService’de{" "}
+            <span className="font-medium text-foreground">RENT_USER</span> rolü ile açılır. Silmek için satırdan detaya
+            gidin; en altta <span className="font-medium text-foreground">Tehlikeli bölge</span> kullanılır.
+          </p>
+        </div>
+        {hasManagerAccess ? (
+          <Button type="button" size="sm" className="h-9 gap-1.5 shrink-0" onClick={() => setAddOpen(true)}>
+            <UserPlus className="h-4 w-4" />
+            Kullanıcı ekle
+          </Button>
+        ) : null}
       </div>
+
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => {
+          setAddOpen(open);
+          if (!open) resetAddForm();
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Yeni kullanıcı</DialogTitle>
+            <DialogDescription>AuthService kaydı — rol sabit: RENT_USER.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-3 py-1">
+            <div className="grid gap-1.5">
+              <Label htmlFor="add-fn">Ad</Label>
+              <Input id="add-fn" value={firstName} onChange={(e) => setFirstName(e.target.value)} autoComplete="given-name" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="add-ln">Soyad</Label>
+              <Input id="add-ln" value={lastName} onChange={(e) => setLastName(e.target.value)} autoComplete="family-name" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="add-em">E-posta</Label>
+              <Input id="add-em" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="add-ph">Telefon (opsiyonel)</Label>
+              <Input id="add-ph" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="tel" />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="add-pw">Şifre</Label>
+              <Input
+                id="add-pw"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </div>
+            {addError ? <p className="text-xs text-destructive">{addError}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" size="sm" onClick={() => setAddOpen(false)}>
+              İptal
+            </Button>
+            <Button type="button" size="sm" disabled={addSubmitting} onClick={() => void onAddUser()}>
+              {addSubmitting ? "Kaydediliyor…" : "Kaydet"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
         <div className="relative min-w-0 flex-1">

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useMemo } from "react";
 import {
   BarChart3,
   CalendarRange,
@@ -15,20 +16,29 @@ import {
   Wallet,
 } from "lucide-react";
 
+import { useRentFeRoles } from "@/hooks/useRentFeRoles";
+import { hrefRequiresRentManager } from "@/lib/rbac/route-policy";
+
+const quickMenuAll = [
+  { href: "/vehicles", label: "Araçlar", icon: Car, bg: "from-sky-500/25 to-blue-500/10" },
+  { href: "/reports", label: "Raporlar", icon: BarChart3, bg: "from-violet-500/25 to-indigo-500/10" },
+  { href: "/logs", label: "Kiralamalar", icon: ClipboardList, bg: "from-amber-500/25 to-orange-500/10" },
+  { href: "/calendar", label: "Takvim", icon: CalendarRange, bg: "from-fuchsia-500/25 to-purple-500/10" },
+  { href: "/payments", label: "Ödemeler", icon: Wallet, bg: "from-emerald-500/25 to-teal-500/10" },
+  { href: "/requests", label: "Talepler", icon: MailCheck, bg: "from-rose-500/25 to-pink-500/10" },
+  { href: "/customers", label: "Customers", icon: Users, bg: "from-cyan-500/25 to-sky-500/10" },
+  { href: "/customers/channel", label: "Toplu mesaj", icon: MessagesSquare, bg: "from-lime-500/25 to-green-500/10" },
+  { href: "/users", label: "Kullanıcılar", icon: UserCog, bg: "from-slate-500/25 to-zinc-500/10" },
+  { href: "/countries", label: "Ülkeler", icon: Globe2, bg: "from-purple-500/25 to-blue-500/10" },
+  { href: "/settings", label: "Ayarlar", icon: Settings, bg: "from-stone-500/25 to-neutral-500/10" },
+] as const;
+
 export default function DashboardPage() {
-  const quickMenu = [
-    { href: "/vehicles", label: "Araçlar", icon: Car, bg: "from-sky-500/25 to-blue-500/10" },
-    { href: "/reports", label: "Raporlar", icon: BarChart3, bg: "from-violet-500/25 to-indigo-500/10" },
-    { href: "/logs", label: "Kiralamalar", icon: ClipboardList, bg: "from-amber-500/25 to-orange-500/10" },
-    { href: "/calendar", label: "Takvim", icon: CalendarRange, bg: "from-fuchsia-500/25 to-purple-500/10" },
-    { href: "/payments", label: "Ödemeler", icon: Wallet, bg: "from-emerald-500/25 to-teal-500/10" },
-    { href: "/requests", label: "Talepler", icon: MailCheck, bg: "from-rose-500/25 to-pink-500/10" },
-    { href: "/customers", label: "Customers", icon: Users, bg: "from-cyan-500/25 to-sky-500/10" },
-    { href: "/customers/channel", label: "Toplu mesaj", icon: MessagesSquare, bg: "from-lime-500/25 to-green-500/10" },
-    { href: "/users", label: "Kullanıcılar", icon: UserCog, bg: "from-slate-500/25 to-zinc-500/10" },
-    { href: "/countries", label: "Ülkeler", icon: Globe2, bg: "from-purple-500/25 to-blue-500/10" },
-    { href: "/settings", label: "Ayarlar", icon: Settings, bg: "from-stone-500/25 to-neutral-500/10" },
-  ] as const;
+  const { hasManagerAccess } = useRentFeRoles();
+  const quickMenu = useMemo(
+    () => quickMenuAll.filter((item) => !hrefRequiresRentManager(item.href) || hasManagerAccess),
+    [hasManagerAccess],
+  );
 
   return (
     <div className="-mx-3 -my-3 min-h-[calc(100vh-3rem)] sm:-mx-4 sm:-my-4">

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getExpFromAccessToken } from "@/lib/auth-user";
 import { AUTH_BASE } from "@/lib/config";
+import { applyRentFeRolesCookie } from "@/lib/rbac/role-cookie";
 import { setAuthCookies, setTwoFactorPendingCookie } from "@/lib/server/auth-cookies";
 
 type LoginBody = {
@@ -80,6 +81,9 @@ export async function POST(req: Request) {
       typeof accessToken === "string" ? accessToken : undefined,
       typeof refreshToken === "string" ? refreshToken : undefined,
     );
+    if (typeof accessToken === "string" && accessToken) {
+      applyRentFeRolesCookie(response, accessToken, data);
+    }
     return response;
   } catch {
     return NextResponse.json({ message: "Sunucu hatası" }, { status: 500 });

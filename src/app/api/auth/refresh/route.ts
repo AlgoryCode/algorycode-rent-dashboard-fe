@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 import { getExpFromAccessToken } from "@/lib/auth-user";
 import { AUTH_BASE, COOKIE_MAX_AGE_SECONDS } from "@/lib/config";
+import { applyRentFeRolesCookie } from "@/lib/rbac/role-cookie";
 import { clearAuthCookies } from "@/lib/server/auth-cookies";
 
 /** Panel httpOnly çerezleriyle AuthService refresh; rent-api 401 sonrası same-origin çağrı. */
@@ -72,6 +73,9 @@ export async function POST() {
     if (newRefresh) {
       response.cookies.set("algory_refresh_token", newRefresh, cookieOpts);
       response.cookies.set("refreshToken", newRefresh, cookieOpts);
+    }
+    if (accessToken) {
+      applyRentFeRolesCookie(response, accessToken, data as Record<string, unknown>);
     }
     return response;
   } catch {

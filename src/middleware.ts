@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
+import { decodeJwtPayloadJson, extractRentRolesFromJwtPayload } from "@/lib/rbac/jwt-rent-roles";
+import { hasRentManagerAccess } from "@/lib/rbac/rent-roles";
+import { requiresRentManagerForPath } from "@/lib/rbac/route-policy";
+
 const AUTH_PATH = "/login";
 
 function isProtectedPath(pathname: string) {
@@ -57,6 +61,20 @@ export function middleware(req: NextRequest) {
       url.pathname = AUTH_PATH;
       url.searchParams.set("from", pathname);
       return NextResponse.redirect(url);
+    }
+    if (requiresRentManagerForPath(pathname)) {
+      const token =
+        req.cookies.get("algory_access_token")?.value?.trim() ||
+        req.cookies.get("accessToken")?.value?.trim() ||
+        "";
+      const payload = token ? decodeJwtPayloadJson(token) : null;
+      const roles = payload ? extractRentRolesFromJwtPayload(payload) : [];
+      if (!hasRentManagerAccess(roles)) {
+        const url = req.nextUrl.clone();
+        url.pathname = "/dashboard";
+        url.searchParams.set("yetkisiz", "1");
+        return NextResponse.redirect(url);
+      }
     }
     return NextResponse.next();
   }

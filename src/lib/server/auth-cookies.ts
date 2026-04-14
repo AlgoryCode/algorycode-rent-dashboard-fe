@@ -4,6 +4,7 @@ import {
   COOKIE_MAX_AGE_SECONDS,
   TWO_FACTOR_PENDING_COOKIE_MAX_AGE_SECONDS,
 } from "@/lib/config";
+import { clearRentFeRolesCookie } from "@/lib/rbac/role-cookie";
 
 const baseOptions = {
   httpOnly: true,
@@ -39,4 +40,5 @@ export function clearAuthCookies(response: NextResponse) {
   response.cookies.set("accessToken", "", clearOptions);
   response.cookies.set("refreshToken", "", clearOptions);
   response.cookies.set("algory_2fa_pending", "", { ...baseOptions, maxAge: 0 });
+  clearRentFeRolesCookie(response);
 }
