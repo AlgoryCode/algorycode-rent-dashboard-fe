@@ -1,0 +1,154 @@
+import type { AppLocale } from "./locales";
+
+const tr = {
+  "nav.quickMenu": "Hızlı menü",
+  "nav.vehicles": "Araçlar",
+  "nav.logs": "Kiralamalar",
+  "nav.calendar": "Takvim",
+  "nav.customers": "Müşteriler",
+  "nav.requests": "Talepler",
+  "nav.users": "Kullanıcılar",
+  "nav.payments": "Ödemeler",
+  "nav.reports": "Raporlar",
+  "nav.countries": "Ülkeler",
+  "nav.bulkMessage": "Toplu mesaj",
+  "nav.settings": "Ayarlar",
+  "nav.login": "Giriş",
+
+  "shell.subtitle": "Yönetim paneli",
+  "shell.searchPlaceholder": "Sayfa ara…",
+  "shell.searchAria": "Sayfa arama",
+  "shell.searchRun": "Aramayı çalıştır",
+  "shell.searchNoResults": "Sonuç bulunamadı.",
+  "shell.menuOpen": "Menüyü aç",
+  "shell.menuClose": "Menüyü kapat",
+  "shell.accountMenu": "Hesap menüsü",
+  "shell.logout": "Çıkış",
+  "shell.back": "Geri",
+  "shell.rbacToast": "Bu sayfa için RENT_MANAGER veya RENT_ADMIN rolü gerekir.",
+
+  "toast.logoutOk": "Çıkış yapıldı",
+  "toast.logoutFail": "Çıkış sırasında hata",
+
+  "lang.section": "Dil",
+
+  "login.title": "Yönetim paneli",
+  "login.subtitle": "Hesabınızla giriş yapın.",
+  "login.emailLabel": "Kullanıcı adı (e-posta)",
+  "login.passwordLabel": "Şifre",
+  "login.emailPlaceholder": "ornek@sirket.com",
+  "login.submit": "Giriş yap",
+  "login.submitting": "Giriş…",
+  "login.errorCredentials": "Kullanıcı adı ve şifre gerekli.",
+  "login.errorGeneric": "Giriş yapılamadı",
+  "login.success": "Giriş yapıldı",
+  "login.twoFactorTitle": "Bu hesapta 2FA açık",
+  "login.twoFactorDesc":
+    "Kiralama paneli şimdilik yalnızca doğrudan giriş (basicauth) destekliyor. 2FA kapalı bir kullanıcı deneyin.",
+} as const;
+
+export type MessageKey = keyof typeof tr;
+
+const en: Record<MessageKey, string> = {
+  "nav.quickMenu": "Quick menu",
+  "nav.vehicles": "Vehicles",
+  "nav.logs": "Rentals",
+  "nav.calendar": "Calendar",
+  "nav.customers": "Customers",
+  "nav.requests": "Requests",
+  "nav.users": "Users",
+  "nav.payments": "Payments",
+  "nav.reports": "Reports",
+  "nav.countries": "Countries",
+  "nav.bulkMessage": "Bulk message",
+  "nav.settings": "Settings",
+  "nav.login": "Sign in",
+
+  "shell.subtitle": "Admin console",
+  "shell.searchPlaceholder": "Search pages…",
+  "shell.searchAria": "Page search",
+  "shell.searchRun": "Run search",
+  "shell.searchNoResults": "No results found.",
+  "shell.menuOpen": "Open menu",
+  "shell.menuClose": "Close menu",
+  "shell.accountMenu": "Account menu",
+  "shell.logout": "Sign out",
+  "shell.back": "Back",
+  "shell.rbacToast": "This page requires the RENT_MANAGER or RENT_ADMIN role.",
+
+  "toast.logoutOk": "Signed out",
+  "toast.logoutFail": "Error while signing out",
+
+  "lang.section": "Language",
+
+  "login.title": "Admin console",
+  "login.subtitle": "Sign in with your account.",
+  "login.emailLabel": "Username (email)",
+  "login.passwordLabel": "Password",
+  "login.emailPlaceholder": "you@company.com",
+  "login.submit": "Sign in",
+  "login.submitting": "Signing in…",
+  "login.errorCredentials": "Username and password are required.",
+  "login.errorGeneric": "Sign-in failed",
+  "login.success": "Signed in",
+  "login.twoFactorTitle": "Two-factor authentication is enabled",
+  "login.twoFactorDesc":
+    "This panel currently supports direct (basicauth) sign-in only. Try a user without 2FA.",
+};
+
+const sq: Record<MessageKey, string> = {
+  "nav.quickMenu": "Menu i shpejtë",
+  "nav.vehicles": "Automjetet",
+  "nav.logs": "Qiratë",
+  "nav.calendar": "Kalendari",
+  "nav.customers": "Klientët",
+  "nav.requests": "Kërkesat",
+  "nav.users": "Përdoruesit",
+  "nav.payments": "Pagesat",
+  "nav.reports": "Raportet",
+  "nav.countries": "Shtetet",
+  "nav.bulkMessage": "Mesazh masiv",
+  "nav.settings": "Cilësimet",
+  "nav.login": "Hyrje",
+
+  "shell.subtitle": "Panel administrimi",
+  "shell.searchPlaceholder": "Kërko faqe…",
+  "shell.searchAria": "Kërkim faqesh",
+  "shell.searchRun": "Ekzekuto kërkimin",
+  "shell.searchNoResults": "Nuk u gjet asnjë rezultat.",
+  "shell.menuOpen": "Hap menunë",
+  "shell.menuClose": "Mbyll menunë",
+  "shell.accountMenu": "Menu e llogarisë",
+  "shell.logout": "Dil",
+  "shell.back": "Prapa",
+  "shell.rbacToast": "Kjo faqe kërkon rolin RENT_MANAGER ose RENT_ADMIN.",
+
+  "toast.logoutOk": "U dolët",
+  "toast.logoutFail": "Gabim gjatë daljes",
+
+  "lang.section": "Gjuha",
+
+  "login.title": "Panel administrimi",
+  "login.subtitle": "Hyni me llogarinë tuaj.",
+  "login.emailLabel": "Përdoruesi (email)",
+  "login.passwordLabel": "Fjalëkalimi",
+  "login.emailPlaceholder": "ju@kompania.com",
+  "login.submit": "Hyr",
+  "login.submitting": "Duke hyr…",
+  "login.errorCredentials": "Kërkohen përdoruesi dhe fjalëkalimi.",
+  "login.errorGeneric": "Hyrja dështoi",
+  "login.success": "U hyt",
+  "login.twoFactorTitle": "2FA është aktiv",
+  "login.twoFactorDesc":
+    "Paneli mbështet për tani vetëm hyrjen e drejtpërdrejtë (basicauth). Provoni një përdorues pa 2FA.",
+};
+
+const bundles = {
+  tr: { ...tr },
+  en: { ...en },
+  sq: { ...sq },
+} satisfies Record<AppLocale, Record<MessageKey, string>>;
+
+export function translate(locale: AppLocale, key: MessageKey): string {
+  return bundles[locale][key] ?? bundles.tr[key] ?? key;
+}

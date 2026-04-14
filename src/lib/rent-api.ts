@@ -670,7 +670,7 @@ function mapRentalRequestFromApi(raw: Record<string, unknown>): RentalRequestDto
   return {
     id: String(raw.id),
     referenceNo: String(raw.referenceNo ?? ""),
-    createdAt: asOptionalString(raw.createdAt),
+    createdAt: asOptionalString(raw.createdAt ?? raw.created_at),
     status:
       raw.status === "approved" || raw.status === "rejected" || raw.status === "pending"
         ? (raw.status as RentalRequestStatus)

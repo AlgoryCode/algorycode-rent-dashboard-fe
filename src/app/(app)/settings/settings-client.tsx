@@ -85,8 +85,8 @@ export function SettingsClient() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pb-4 text-xs text-muted-foreground">
-              Oturumu kapatmak için üst menüdeki <span className="font-medium text-foreground">Çıkış</span> düğmesini
-              kullanın.
+              Oturumu kapatmak için üst menüdeki hesap avatarına tıklayıp{" "}
+              <span className="font-medium text-foreground">Çıkış</span> öğesini seçin.
             </CardContent>
           </Card>
         </TabsContent>

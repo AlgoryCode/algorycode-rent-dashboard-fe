@@ -53,6 +53,14 @@ function canShowGenerateContract(row: RentalRequestDto): boolean {
   return row.contractGenerationAvailable !== false;
 }
 
+/** Talebin sisteme düşme zamanı (`createdAt` ISO). */
+function formatRequestReceivedAt(iso: string | undefined): string {
+  if (!iso?.trim()) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" });
+}
+
 type SendWizardStep =
   | "source"
   | "external-channel"
@@ -612,7 +620,10 @@ export function RequestsClient() {
                   </div>
                   <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
                     <p>
-                      Tarih: {row.startDate} → {row.endDate}
+                      <span className="text-foreground">Talep gelişi:</span> {formatRequestReceivedAt(row.createdAt)}
+                    </p>
+                    <p>
+                      Kiralama dönemi: {row.startDate} → {row.endDate}
                     </p>
                     <p>Telefon: {row.customer.phone}</p>
                     <p>E-posta: {row.customer.email}</p>

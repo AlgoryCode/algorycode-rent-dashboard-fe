@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 
+import { LocaleProvider } from "@/components/locale-provider";
 import { QueryProvider } from "@/components/query-provider";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -29,7 +30,9 @@ export default function RootLayout({
   return (
     <html lang="tr" className={`${inter.variable} h-full`}>
       <body className="min-h-full font-sans antialiased">
-        <QueryProvider>{children}</QueryProvider>
+        <LocaleProvider>
+          <QueryProvider>{children}</QueryProvider>
+        </LocaleProvider>
         <Toaster />
       </body>
     </html>
