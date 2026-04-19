@@ -116,6 +116,42 @@ function rentClient() {
   return client;
 }
 
+export type VehicleBodyStyleRow = {
+  code: string;
+  labelTr: string;
+  sortOrder: number;
+};
+
+/** Gövde / yakıt / vites referans satırı (aynı JSON şekli). */
+export type VehicleCatalogRow = VehicleBodyStyleRow;
+
+function mapVehicleCatalogRow(o: Record<string, unknown>): VehicleCatalogRow {
+  return {
+    code: String(o.code ?? ""),
+    labelTr: String(o.labelTr ?? o.label_tr ?? ""),
+    sortOrder: typeof o.sortOrder === "number" ? o.sortOrder : Number(o.sort_order ?? 0) || 0,
+  };
+}
+
+const VEHICLE_CATALOG_API = {
+  bodyStyle: "/vehicle-body-styles",
+  fuelType: "/vehicle-fuel-types",
+  transmissionType: "/vehicle-transmission-types",
+} as const;
+
+export type VehicleCatalogKind = keyof typeof VEHICLE_CATALOG_API;
+
+export type VehicleCatalogCreatePayload = {
+  code: string;
+  labelTr: string;
+  sortOrder: number;
+};
+
+export type VehicleCatalogUpdatePayload = {
+  labelTr?: string;
+  sortOrder?: number;
+};
+
 export type VehicleOptionDefinitionPayload = {
   title: string;
   description?: string;
@@ -136,10 +172,10 @@ export type CreateVehiclePayload = {
   rentalDailyPrice: number;
   commissionRatePercent?: number;
   commissionBrokerPhone?: string;
-  /** ISO 3166-1 alpha-2 */
-  countryCode?: string;
-  /** rent-service şehir (zorunlu) */
-  cityId: string;
+  /** ISO 3166-1 alpha-2 (zorunlu). */
+  countryCode: string;
+  /** rent-service şehir (opsiyonel). */
+  cityId?: string;
   defaultPickupHandoverLocationId: string;
   /** Boş veya atlanırsa araç için teslim kısıtı yok; doluysa yalnız bu RETURN noktaları geçerli. */
   returnHandoverLocationIds?: string[];
@@ -151,6 +187,13 @@ export type CreateVehiclePayload = {
   /** Her satır bir madde; en fazla 30 (opsiyonel). */
   highlights?: string[];
   images?: Record<string, string>;
+  engine?: string;
+  fuelType?: string;
+  bodyColor?: string;
+  seats?: number;
+  luggage?: number;
+  transmissionType?: string;
+  bodyStyleCode?: string;
 };
 
 export type UpdateVehiclePayload = {
@@ -175,6 +218,13 @@ export type UpdateVehiclePayload = {
   /** {@code undefined}: değiştirme; boş dizi: tümünü sil. */
   highlights?: string[];
   images?: Record<string, string>;
+  engine?: string;
+  fuelType?: string;
+  bodyColor?: string;
+  seats?: number;
+  luggage?: number;
+  transmissionType?: string;
+  bodyStyleCode?: string;
 };
 
 export type CountryRow = {
@@ -333,6 +383,51 @@ export type FetchRentalsParams = {
   status?: "active" | "pending" | "completed" | "cancelled";
   startDate?: string;
   endDate?: string;
+};
+
+export type RentalDashboardSummary = {
+  rentalCount: number;
+  rentalDayBooked: number;
+  totalRevenueEur: number;
+  totalBaseRentalEur: number;
+  totalOptionsEur: number;
+  totalCommissionEur: number;
+  activeOrPendingCount: number;
+  completedCount: number;
+};
+
+export type RentalDashboardVehicleRow = {
+  vehicleId: string;
+  plate: string;
+  brand: string;
+  model: string;
+  rentalCount: number;
+  rentalDayBooked: number;
+  revenueEur: number;
+  baseRentalEur: number;
+  optionsEur: number;
+};
+
+export type RentalDashboardTimelineRow = {
+  period: string;
+  label: string;
+  rentalStarts: number;
+  revenueEur: number;
+};
+
+export type RentalDashboardReport = {
+  fromInclusive: string;
+  toInclusive: string;
+  timelineGranularity: "day" | "month";
+  summary: RentalDashboardSummary;
+  byVehicle: RentalDashboardVehicleRow[];
+  timeline: RentalDashboardTimelineRow[];
+};
+
+export type FetchRentalDashboardParams = {
+  from?: string;
+  to?: string;
+  vehicleId?: string;
 };
 
 export type UpdateRentalPayload = {
@@ -542,7 +637,56 @@ export function mapVehicleFromApi(raw: Record<string, unknown>): Vehicle {
     optionDefinitions: mapVehicleOptionDefinitions(raw.optionDefinitions),
     highlights: mapVehicleHighlights(raw.highlights),
     images: mapVehicleImages(raw.images),
+    engine: asOptionalString(raw.engine),
+    fuelType: asOptionalString(raw.fuelType),
+    bodyColor: asOptionalString(raw.bodyColor),
+    seats: asOptionalNumber(raw.seats),
+    luggage: asOptionalNumber(raw.luggage),
+    transmissionType: asOptionalString(raw.transmissionType),
+    bodyStyleCode: asOptionalString(raw.bodyStyleCode),
+    bodyStyleLabel: asOptionalString(raw.bodyStyleLabel),
   };
+}
+
+export async function fetchVehicleCatalogFromRentApi(kind: VehicleCatalogKind): Promise<VehicleCatalogRow[]> {
+  const { data } = await rentClient().get<unknown[]>(VEHICLE_CATALOG_API[kind]);
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapVehicleCatalogRow(row as Record<string, unknown>));
+}
+
+export async function fetchVehicleBodyStylesFromRentApi(): Promise<VehicleBodyStyleRow[]> {
+  return fetchVehicleCatalogFromRentApi("bodyStyle");
+}
+
+export async function fetchVehicleFuelTypesFromRentApi(): Promise<VehicleCatalogRow[]> {
+  return fetchVehicleCatalogFromRentApi("fuelType");
+}
+
+export async function fetchVehicleTransmissionTypesFromRentApi(): Promise<VehicleCatalogRow[]> {
+  return fetchVehicleCatalogFromRentApi("transmissionType");
+}
+
+export async function createVehicleCatalogEntryOnRentApi(
+  kind: VehicleCatalogKind,
+  payload: VehicleCatalogCreatePayload,
+): Promise<VehicleCatalogRow> {
+  const { data } = await rentClient().post<unknown>(VEHICLE_CATALOG_API[kind], payload);
+  return mapVehicleCatalogRow(data as Record<string, unknown>);
+}
+
+export async function updateVehicleCatalogEntryOnRentApi(
+  kind: VehicleCatalogKind,
+  code: string,
+  payload: VehicleCatalogUpdatePayload,
+): Promise<VehicleCatalogRow> {
+  const path = `${VEHICLE_CATALOG_API[kind]}/${encodeURIComponent(code)}`;
+  const { data } = await rentClient().put<unknown>(path, payload);
+  return mapVehicleCatalogRow(data as Record<string, unknown>);
+}
+
+export async function deleteVehicleCatalogEntryOnRentApi(kind: VehicleCatalogKind, code: string): Promise<void> {
+  const path = `${VEHICLE_CATALOG_API[kind]}/${encodeURIComponent(code)}`;
+  await rentClient().delete(path);
 }
 
 export function mapCountryFromApi(raw: Record<string, unknown>): CountryRow {
@@ -701,6 +845,59 @@ export async function fetchVehiclesFromRentApi(): Promise<Vehicle[]> {
   return data.map((row) => mapVehicleFromApi(row as Record<string, unknown>));
 }
 
+export type VehicleOccupancySourceDto = "rental" | "rental_request";
+
+export type VehicleOccupancyRangeApi = {
+  id: string;
+  source: VehicleOccupancySourceDto;
+  startDate: string;
+  endDate: string;
+};
+
+export type VehicleCalendarOccupancyApi = {
+  from: string;
+  to: string;
+  ranges: VehicleOccupancyRangeApi[];
+};
+
+function mapVehicleOccupancyRangeFromApi(raw: Record<string, unknown>): VehicleOccupancyRangeApi | null {
+  const startDate = String(raw.startDate ?? "");
+  const endDate = String(raw.endDate ?? "");
+  if (!startDate || !endDate) return null;
+  const src = String(raw.source ?? "rental");
+  const source: VehicleOccupancySourceDto = src === "rental_request" ? "rental_request" : "rental";
+  return {
+    id: String(raw.id ?? ""),
+    source,
+    startDate,
+    endDate,
+  };
+}
+
+/** Araç takvimi: iptal olmayan kiralamalar + pending/onaylı talepler (backend birleşik aralık). */
+export async function fetchVehicleCalendarOccupancyFromRentApi(
+  vehicleId: string,
+  from: string,
+  to: string,
+): Promise<VehicleCalendarOccupancyApi> {
+  const { data } = await rentClient().get<unknown>(
+    `/vehicles/${encodeURIComponent(vehicleId)}/calendar/occupancy`,
+    { params: { from, to } },
+  );
+  const o = (data ?? {}) as Record<string, unknown>;
+  const rangesRaw = o.ranges;
+  const ranges = Array.isArray(rangesRaw)
+    ? rangesRaw
+        .map((r) => mapVehicleOccupancyRangeFromApi(r as Record<string, unknown>))
+        .filter((x): x is VehicleOccupancyRangeApi => x != null)
+    : [];
+  return {
+    from: String(o.from ?? from),
+    to: String(o.to ?? to),
+    ranges,
+  };
+}
+
 export async function fetchRentalsFromRentApi(params?: FetchRentalsParams): Promise<RentalSession[]> {
   const query: Record<string, string> = {};
   if (params?.vehicleId) query.vehicleId = params.vehicleId;
@@ -710,6 +907,17 @@ export async function fetchRentalsFromRentApi(params?: FetchRentalsParams): Prom
   const { data } = await rentClient().get<unknown[]>("/rentals", { params: query });
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapRentalFromApi(row as Record<string, unknown>));
+}
+
+export async function fetchRentalDashboardReport(
+  params?: FetchRentalDashboardParams,
+): Promise<RentalDashboardReport> {
+  const q: Record<string, string> = {};
+  if (params?.from) q.from = params.from;
+  if (params?.to) q.to = params.to;
+  if (params?.vehicleId) q.vehicleId = params.vehicleId;
+  const { data } = await rentClient().get<RentalDashboardReport>("/reports/rentals/dashboard", { params: q });
+  return data;
 }
 
 export async function fetchRentalByIdFromRentApi(id: string): Promise<RentalSession> {
@@ -980,6 +1188,10 @@ export async function createCountryOnRentApi(payload: CreateCountryPayload): Pro
 }
 
 export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Promise<Vehicle> {
+  const countryCode = payload.countryCode?.trim().toUpperCase();
+  if (!countryCode || countryCode.length !== 2) {
+    throw new Error("Ülke kodu (ISO alpha-2) zorunludur.");
+  }
   const body: Record<string, unknown> = {
     plate: payload.plate,
     brand: payload.brand,
@@ -989,7 +1201,7 @@ export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Pro
     external: Boolean(payload.external),
     externalCompany: payload.externalCompany?.trim() || undefined,
     rentalDailyPrice: payload.rentalDailyPrice,
-    cityId: payload.cityId,
+    countryCode,
     defaultPickupHandoverLocationId: payload.defaultPickupHandoverLocationId,
     ...(payload.returnHandoverLocationIds != null && payload.returnHandoverLocationIds.length > 0
       ? { returnHandoverLocationIds: payload.returnHandoverLocationIds }
@@ -1019,9 +1231,16 @@ export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Pro
   if (payload.highlights != null && payload.highlights.length > 0) {
     body.highlights = payload.highlights.map((s) => s.trim()).filter((s) => s.length > 0).slice(0, 30);
   }
-  if (payload.countryCode && payload.countryCode.length === 2) {
-    body.countryCode = payload.countryCode.toUpperCase();
+  if (payload.cityId?.trim()) {
+    body.cityId = payload.cityId.trim();
   }
+  if (payload.engine?.trim()) body.engine = payload.engine.trim();
+  if (payload.fuelType?.trim()) body.fuelType = payload.fuelType.trim();
+  if (payload.bodyColor?.trim()) body.bodyColor = payload.bodyColor.trim();
+  if (payload.seats != null && Number.isFinite(payload.seats)) body.seats = payload.seats;
+  if (payload.luggage != null && Number.isFinite(payload.luggage)) body.luggage = payload.luggage;
+  if (payload.transmissionType?.trim()) body.transmissionType = payload.transmissionType.trim();
+  if (payload.bodyStyleCode?.trim()) body.bodyStyleCode = payload.bodyStyleCode.trim();
   const { data } = await rentClient().post<unknown>("/vehicles", body);
   return mapVehicleFromApi(data as Record<string, unknown>);
 }
@@ -1064,6 +1283,13 @@ export async function updateVehicleOnRentApi(id: string, payload: UpdateVehicleP
   if (payload.highlights !== undefined) {
     body.highlights = payload.highlights.map((s) => s.trim()).filter((s) => s.length > 0).slice(0, 30);
   }
+  if (payload.engine !== undefined) body.engine = payload.engine?.trim() || undefined;
+  if (payload.fuelType !== undefined) body.fuelType = payload.fuelType?.trim() || undefined;
+  if (payload.bodyColor !== undefined) body.bodyColor = payload.bodyColor?.trim() || undefined;
+  if (payload.seats !== undefined) body.seats = payload.seats;
+  if (payload.luggage !== undefined) body.luggage = payload.luggage;
+  if (payload.transmissionType !== undefined) body.transmissionType = payload.transmissionType?.trim() || undefined;
+  if (payload.bodyStyleCode !== undefined) body.bodyStyleCode = payload.bodyStyleCode?.trim() || undefined;
   const { data } = await rentClient().patch<unknown>(`/vehicles/${id}`, body);
   return mapVehicleFromApi(data as Record<string, unknown>);
 }
@@ -1212,8 +1438,12 @@ export async function queryRentalRequestByReferenceOnRentApi(referenceNo: string
   return mapRentalRequestFromApi(data as Record<string, unknown>);
 }
 
-export async function fetchRentalRequestsFromRentApi(): Promise<RentalRequestDto[]> {
-  const { data } = await rentClient().get<unknown[]>("/rental-requests");
+export async function fetchRentalRequestsFromRentApi(params?: {
+  vehicleId?: string;
+}): Promise<RentalRequestDto[]> {
+  const q: Record<string, string> = {};
+  if (params?.vehicleId) q.vehicleId = params.vehicleId;
+  const { data } = await rentClient().get<unknown[]>("/rental-requests", { params: q });
   if (!Array.isArray(data)) return [];
   return data.map((row) => mapRentalRequestFromApi(row as Record<string, unknown>));
 }
@@ -1246,6 +1476,11 @@ export async function fetchRentalRequestContractPdfBlob(id: string): Promise<Blo
     headers: { Accept: "application/pdf" },
   });
   return new Blob([data], { type: "application/pdf" });
+}
+
+/** Müşteri e-postasına Thymeleaf şablonlu sözleşme bildirimi (Rabbit mail kuyruğu). */
+export async function sendRentalRequestContractEmailOnRentApi(id: string): Promise<void> {
+  await rentClient().post(`/rental-requests/${encodeURIComponent(id)}/send-contract-email`, {});
 }
 
 export type CustomerRecordStatePayload = {

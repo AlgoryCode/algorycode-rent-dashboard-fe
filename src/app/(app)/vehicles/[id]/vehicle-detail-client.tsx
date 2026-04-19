@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { addDays, addMonths, addYears, differenceInCalendarDays, eachDayOfInterval, format, parseISO, startOfDay, startOfMonth } from "date-fns";
 import { tr } from "date-fns/locale";
@@ -46,9 +47,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useCountries } from "@/hooks/use-countries";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
 import { useFleetVehicles } from "@/hooks/use-fleet-vehicles";
-import { fetchHandoverLocationsFromRentApi, getRentApiErrorMessage, type HandoverLocationApiRow } from "@/lib/rent-api";
+import {
+  fetchHandoverLocationsFromRentApi,
+  fetchVehicleBodyStylesFromRentApi,
+  fetchVehicleCalendarOccupancyFromRentApi,
+  getRentApiErrorMessage,
+  type HandoverLocationApiRow,
+  type VehicleBodyStyleRow,
+} from "@/lib/rent-api";
+import { rentKeys } from "@/lib/rent-query-keys";
 import {
   bookedDatesForVehicle,
+  bookedDatesFromOccupancyRanges,
   dateRangesOverlap,
   formatDay,
   sessionsForVehicle,
@@ -91,6 +101,23 @@ type AdditionalDriverDraft = {
 
 type ReportRange = "1w" | "1m" | "6m" | "1y";
 const COUNTRY_NONE = "__none__";
+const SPECS_FUEL_NONE = "__fuel_none__";
+const SPECS_TRANS_NONE = "__trans_none__";
+const SPECS_BODY_NONE = "__body_none__";
+
+const VEHICLE_FUEL_SELECT: { value: string; label: string }[] = [
+  { value: SPECS_FUEL_NONE, label: "Seçilmedi" },
+  { value: "benzin", label: "Benzin" },
+  { value: "dizel", label: "Dizel" },
+  { value: "hibrit", label: "Hibrit" },
+  { value: "elektrik", label: "Elektrik" },
+];
+
+const VEHICLE_TRANSMISSION_SELECT: { value: string; label: string }[] = [
+  { value: SPECS_TRANS_NONE, label: "Seçilmedi" },
+  { value: "otomatik", label: "Otomatik" },
+  { value: "manuel", label: "Manuel" },
+];
 
 function blankAdditionalDriver(): AdditionalDriverDraft {
   return {
@@ -121,12 +148,27 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
   const { updateVehicle, deleteVehicle } = useFleetVehicles();
   const { countryByCode, countries } = useCountries();
   const today = useMemo(() => new Date(), []);
+  const occupancyWindow = useMemo(() => {
+    const from = format(startOfDay(addMonths(today, -6)), "yyyy-MM-dd");
+    const to = format(startOfDay(addMonths(today, 24)), "yyyy-MM-dd");
+    return { from, to };
+  }, [today]);
+  const { data: occupancyData } = useQuery({
+    queryKey: rentKeys.vehicleCalendarOccupancy(vehicle.id, occupancyWindow.from, occupancyWindow.to),
+    queryFn: () =>
+      fetchVehicleCalendarOccupancyFromRentApi(vehicle.id, occupancyWindow.from, occupancyWindow.to),
+  });
   const countryMeta = useMemo(() => {
     const cc = vehicle.countryCode?.toUpperCase();
     return cc ? countryByCode.get(cc) : undefined;
   }, [vehicle.countryCode, countryByCode]);
   const status = vehicleFleetStatus(vehicle, allSessions, today);
-  const booked = useMemo(() => bookedDatesForVehicle(allSessions, vehicle.id), [allSessions, vehicle.id]);
+  const booked = useMemo(() => {
+    if (occupancyData?.ranges != null) {
+      return bookedDatesFromOccupancyRanges(occupancyData.ranges);
+    }
+    return bookedDatesForVehicle(allSessions, vehicle.id);
+  }, [occupancyData, allSessions, vehicle.id]);
   const sessions = useMemo(() => sessionsForVehicle(allSessions, vehicle.id), [allSessions, vehicle.id]);
   const rentalLogs = useMemo(
     () => [...sessions].sort((a, b) => sessionCreatedAt(b).localeCompare(sessionCreatedAt(a))),
@@ -180,11 +222,45 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
   const [editReturnHandoverIds, setEditReturnHandoverIds] = useState<string[]>([]);
   const [editPickupHandoverRows, setEditPickupHandoverRows] = useState<HandoverLocationApiRow[]>([]);
   const [editReturnHandoverRows, setEditReturnHandoverRows] = useState<HandoverLocationApiRow[]>([]);
+  const [editFuelType, setEditFuelType] = useState(SPECS_FUEL_NONE);
+  const [editTransmissionType, setEditTransmissionType] = useState(SPECS_TRANS_NONE);
+  const [editBodyStyleCode, setEditBodyStyleCode] = useState(SPECS_BODY_NONE);
+  const [editSeats, setEditSeats] = useState("");
+  const [editLuggage, setEditLuggage] = useState("");
+  const [bodyStyleOptions, setBodyStyleOptions] = useState<VehicleBodyStyleRow[]>([]);
   const editHighlightsFieldId = useId();
 
   useEffect(() => {
     if (!editOpen) return;
     setEditHighlightsText((vehicle.highlights ?? []).join("\n"));
+  }, [editOpen, vehicle]);
+
+  useEffect(() => {
+    if (!editOpen) return;
+    const f = (vehicle.fuelType ?? "").trim().toLowerCase();
+    setEditFuelType(
+      f && VEHICLE_FUEL_SELECT.some((o) => o.value === f) ? f : SPECS_FUEL_NONE,
+    );
+    const t = (vehicle.transmissionType ?? "").trim().toLowerCase();
+    setEditTransmissionType(
+      t && VEHICLE_TRANSMISSION_SELECT.some((o) => o.value === t) ? t : SPECS_TRANS_NONE,
+    );
+    setEditSeats(vehicle.seats != null ? String(vehicle.seats) : "");
+    setEditLuggage(vehicle.luggage != null ? String(vehicle.luggage) : "");
+    let cancelled = false;
+    void fetchVehicleBodyStylesFromRentApi().then((rows) => {
+      if (cancelled) return;
+      setBodyStyleOptions(rows);
+      const b = (vehicle.bodyStyleCode ?? "").trim();
+      if (!b) {
+        setEditBodyStyleCode(SPECS_BODY_NONE);
+        return;
+      }
+      setEditBodyStyleCode(rows.some((r) => r.code === b) ? b : SPECS_BODY_NONE);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [editOpen, vehicle]);
 
   useEffect(() => {
@@ -623,6 +699,18 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
       toast.error("Alış noktası seçin.");
       return;
     }
+    const seatsParsed =
+      editSeats.trim() === "" ? undefined : Number.parseInt(editSeats.trim(), 10);
+    if (editSeats.trim() !== "" && (!Number.isFinite(seatsParsed) || seatsParsed! < 1 || seatsParsed! > 20)) {
+      toast.error("Koltuk sayısı 1–20 arası veya boş olmalıdır.");
+      return;
+    }
+    const luggageParsed =
+      editLuggage.trim() === "" ? undefined : Number.parseInt(editLuggage.trim(), 10);
+    if (editLuggage.trim() !== "" && (!Number.isFinite(luggageParsed) || luggageParsed! < 0)) {
+      toast.error("Bagaj (valiz) için geçerli bir sayı girin veya boş bırakın.");
+      return;
+    }
     if (editExternal) {
       if (!editExternalCompany.trim()) {
         toast.error("Harici araçta firma adı zorunlu.");
@@ -657,6 +745,11 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
         defaultPickupHandoverLocationId: editPickupHandoverId.trim(),
         returnHandoverLocationIds: editReturnHandoverIds,
         highlights: highlightsPayload,
+        fuelType: editFuelType === SPECS_FUEL_NONE ? "" : editFuelType,
+        transmissionType: editTransmissionType === SPECS_TRANS_NONE ? "" : editTransmissionType,
+        bodyStyleCode: editBodyStyleCode === SPECS_BODY_NONE ? "" : editBodyStyleCode,
+        ...(seatsParsed !== undefined ? { seats: seatsParsed } : {}),
+        ...(luggageParsed !== undefined ? { luggage: luggageParsed } : {}),
       });
       toast.success("Araç bilgileri güncellendi.");
       setEditOpen(false);
@@ -1466,6 +1559,82 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
                 value={editRentalPrice}
                 onChange={(e) => setEditRentalPrice(e.target.value)}
               />
+            </div>
+            <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Araç özellikleri
+              </p>
+              <p className="mt-0.5 text-[10px] text-muted-foreground">
+                Yakıt, vites ve gövde tipi listelerden; bagaj sayısını elle girin (ör. 5 valiz).
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Yakıt türü</Label>
+                  <Select value={editFuelType} onValueChange={setEditFuelType}>
+                    <SelectTrigger className="h-9 w-full text-xs">
+                      <SelectValue placeholder="Seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VEHICLE_FUEL_SELECT.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Vites türü</Label>
+                  <Select value={editTransmissionType} onValueChange={setEditTransmissionType}>
+                    <SelectTrigger className="h-9 w-full text-xs">
+                      <SelectValue placeholder="Seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VEHICLE_TRANSMISSION_SELECT.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 sm:col-span-2">
+                  <Label className="text-xs">Araç türü</Label>
+                  <Select value={editBodyStyleCode} onValueChange={setEditBodyStyleCode}>
+                    <SelectTrigger className="h-9 w-full text-xs">
+                      <SelectValue placeholder="Seçin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={SPECS_BODY_NONE}>Seçilmedi</SelectItem>
+                      {bodyStyleOptions.map((o) => (
+                        <SelectItem key={o.code} value={o.code}>
+                          {o.labelTr || o.code}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Koltuk sayısı</Label>
+                  <Input
+                    className="h-9 text-xs"
+                    inputMode="numeric"
+                    placeholder="Örn. 5"
+                    value={editSeats}
+                    onChange={(e) => setEditSeats(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Bagaj (valiz sayısı)</Label>
+                  <Input
+                    className="h-9 text-xs"
+                    inputMode="numeric"
+                    placeholder="Örn. 5"
+                    value={editLuggage}
+                    onChange={(e) => setEditLuggage(e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
             <div className="space-y-1">
               <Label>Ülke</Label>

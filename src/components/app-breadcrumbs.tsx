@@ -101,6 +101,7 @@ function buildBreadcrumbs(
     "/settings/options": "Opsiyonlar",
     "/settings/options/vehicle": "Araç opsiyonları",
     "/settings/options/rental": "Kiralama opsiyonları",
+    "/settings/vehicle-catalog": "Araç özellikleri",
   };
 
   const label = staticLabels[path];

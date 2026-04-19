@@ -17,13 +17,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RentAvailabilityCalendar } from "@/components/rent-calendar/rent-availability-calendar";
 import { RentCalendarLegend } from "@/components/rent-calendar/rent-calendar-legend";
-import { bookedDatesForVehicle } from "@/lib/fleet-utils";
+import {
+  bookedDatesForVehicle,
+  bookedDatesFromRentalRequests,
+  mergeBookedDateArrays,
+} from "@/lib/fleet-utils";
 import { cn } from "@/lib/utils";
 import type { Vehicle } from "@/lib/mock-fleet";
 import { rentKeys } from "@/lib/rent-query-keys";
 import {
   createRentalRequestOnRentApi,
   fetchRentalsFromRentApi,
+  fetchRentalRequestsFromRentApi,
   fetchVehiclesFromRentApi,
   getRentApiErrorMessage,
   queryRentalRequestByReferenceOnRentApi,
@@ -161,7 +166,7 @@ export function TalepClient() {
   }, [vehicles, vehicleId, queryResult?.vehicleId]);
 
   const { data: calendarRentals = [] } = useQuery({
-    queryKey: [...rentKeys.rentals(), "talep-form-wide", vehicleId],
+    queryKey: [...rentKeys.rentals(), "vehicleCalendar", vehicleId],
     queryFn: () =>
       fetchRentalsFromRentApi({
         vehicleId: vehicleId !== VEHICLE_NONE ? vehicleId : undefined,
@@ -171,10 +176,21 @@ export function TalepClient() {
     enabled: route === "create" && createStep === 2 && vehicleId !== VEHICLE_NONE,
   });
 
+  const { data: calendarRentalRequests = [] } = useQuery({
+    queryKey: [...rentKeys.rentalRequests(), "vehicleCalendar", vehicleId],
+    queryFn: () =>
+      fetchRentalRequestsFromRentApi({
+        vehicleId: vehicleId !== VEHICLE_NONE ? vehicleId : undefined,
+      }),
+    enabled: route === "create" && createStep === 2 && vehicleId !== VEHICLE_NONE,
+  });
+
   const bookedDates = useMemo(() => {
     if (vehicleId === VEHICLE_NONE) return [];
-    return bookedDatesForVehicle(calendarRentals, vehicleId);
-  }, [calendarRentals, vehicleId]);
+    const fromRentals = bookedDatesForVehicle(calendarRentals, vehicleId);
+    const fromRequests = bookedDatesFromRentalRequests(calendarRentalRequests, vehicleId);
+    return mergeBookedDateArrays(fromRentals, fromRequests);
+  }, [calendarRentals, calendarRentalRequests, vehicleId]);
 
   const selectedDateRange = useMemo<DateRange | undefined>(() => {
     if (!startDate) return undefined;
@@ -247,9 +263,8 @@ export function TalepClient() {
     try {
       const from = parseISO(startDate);
       const to = parseISO(endDate);
-      const booked = bookedDatesForVehicle(calendarRentals, vehicleId);
       for (const d of eachDayOfInterval({ start: from, end: to })) {
-        if (booked.some((b) => isSameDay(b, d))) {
+        if (bookedDates.some((b) => isSameDay(b, d))) {
           return "Seçilen aralıkta dolu günler var; kırmızı ile işaretli günleri dışarıda bırakın.";
         }
       }
@@ -257,7 +272,7 @@ export function TalepClient() {
       return "Tarihleri kontrol edin.";
     }
     return null;
-  }, [vehicleId, startDate, endDate, calendarRentals]);
+  }, [vehicleId, startDate, endDate, bookedDates]);
 
   const validateStep3 = useCallback((): string | null => {
     if (!fullName.trim()) return "Ad soyad girin.";

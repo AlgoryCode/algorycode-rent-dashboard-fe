@@ -12,7 +12,9 @@ export const RENTAL_STATUS_LABEL: Record<RentalStatus, string> = {
 const VALID = new Set<RentalStatus>(["active", "pending", "completed", "cancelled"]);
 
 export function normalizeRentalStatus(raw: unknown): RentalStatus {
-  if (typeof raw === "string" && VALID.has(raw as RentalStatus)) return raw as RentalStatus;
+  if (typeof raw !== "string") return "active";
+  const s = raw.trim().toLowerCase() as RentalStatus;
+  if (VALID.has(s)) return s;
   return "active";
 }
 

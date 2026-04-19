@@ -50,6 +50,24 @@ const tr = {
   "login.twoFactorTitle": "Bu hesapta 2FA açık",
   "login.twoFactorDesc":
     "Kiralama paneli şimdilik yalnızca doğrudan giriş (basicauth) destekliyor. 2FA kapalı bir kullanıcı deneyin.",
+
+  "reports.title": "Kiralama raporu",
+  "reports.subtitle": "Gelir, kiralama sayısı ve araç bazlı özet; zaman aralığına göre grafik.",
+  "reports.from": "Başlangıç",
+  "reports.to": "Bitiş",
+  "reports.apply": "Güncelle",
+  "reports.vehicleAll": "Tüm araçlar",
+  "reports.kpiRentals": "Kiralama",
+  "reports.kpiRevenue": "Gelir (EUR)",
+  "reports.kpiDays": "Kiralama günü",
+  "reports.kpiCommission": "Komisyon (EUR)",
+  "reports.chartTimeline": "Zaman içinde gelir ve başlangıç",
+  "reports.chartVehicle": "Araç bazlı gelir",
+  "reports.tableVehicle": "Araç detayı",
+  "reports.granularityDay": "Günlük",
+  "reports.granularityMonth": "Aylık",
+  "reports.errorLoad": "Rapor yüklenemedi.",
+  "reports.starts": "Başlayan",
 } as const;
 
 export type MessageKey = keyof typeof tr;
@@ -104,6 +122,24 @@ const en: Record<MessageKey, string> = {
   "login.twoFactorTitle": "Two-factor authentication is enabled",
   "login.twoFactorDesc":
     "This panel currently supports direct (basicauth) sign-in only. Try a user without 2FA.",
+
+  "reports.title": "Rental report",
+  "reports.subtitle": "Revenue, rental counts and per-vehicle totals over your selected range.",
+  "reports.from": "From",
+  "reports.to": "To",
+  "reports.apply": "Refresh",
+  "reports.vehicleAll": "All vehicles",
+  "reports.kpiRentals": "Rentals",
+  "reports.kpiRevenue": "Revenue (EUR)",
+  "reports.kpiDays": "Rental days",
+  "reports.kpiCommission": "Commission (EUR)",
+  "reports.chartTimeline": "Revenue and starts over time",
+  "reports.chartVehicle": "Revenue by vehicle",
+  "reports.tableVehicle": "Vehicle breakdown",
+  "reports.granularityDay": "Daily",
+  "reports.granularityMonth": "Monthly",
+  "reports.errorLoad": "Could not load report.",
+  "reports.starts": "Starts",
 };
 
 const sq: Record<MessageKey, string> = {
@@ -156,6 +192,24 @@ const sq: Record<MessageKey, string> = {
   "login.twoFactorTitle": "2FA është aktiv",
   "login.twoFactorDesc":
     "Paneli mbështet për tani vetëm hyrjen e drejtpërdrejtë (basicauth). Provoni një përdorues pa 2FA.",
+
+  "reports.title": "Raporti i qirasë",
+  "reports.subtitle": "Të ardhurat, numri i qirave dhe për automjet sipas intervalit.",
+  "reports.from": "Nga",
+  "reports.to": "Deri",
+  "reports.apply": "Rifresko",
+  "reports.vehicleAll": "Të gjitha automjetet",
+  "reports.kpiRentals": "Qira",
+  "reports.kpiRevenue": "Të ardhura (EUR)",
+  "reports.kpiDays": "Ditë qiraje",
+  "reports.kpiCommission": "Komision (EUR)",
+  "reports.chartTimeline": "Të ardhurat dhe fillimet në kohë",
+  "reports.chartVehicle": "Të ardhura sipas automjetit",
+  "reports.tableVehicle": "Detaje automjetesh",
+  "reports.granularityDay": "Ditore",
+  "reports.granularityMonth": "Mujore",
+  "reports.errorLoad": "Raporti nuk u ngarkua.",
+  "reports.starts": "Fillime",
 };
 
 const bundles = {

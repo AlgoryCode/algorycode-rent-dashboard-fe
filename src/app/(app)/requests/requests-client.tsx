@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Download, FileText, Mail, MessageCircle, Send, UserRoundSearch } from "lucide-react";
+import { Copy, Download, ExternalLink, FileText, Mail, MessageCircle, Send, UserRoundSearch } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -23,6 +23,7 @@ import { useCustomerDirectoryRows } from "@/hooks/use-customer-directory-rows";
 import { useCustomerRecordStates } from "@/hooks/use-customer-record-states";
 import { useFleetSessions } from "@/hooks/use-fleet-sessions";
 import {
+  buildContractPdfWhatsAppMessage,
   buildEmptyTalepFormMessage,
   buildEmptyTalepFormUrl,
   buildGenericTalepFormInviteMessage,
@@ -35,6 +36,7 @@ import {
   fetchRentalRequestsFromRentApi,
   generateRentalRequestContractOnRentApi,
   getRentApiErrorMessage,
+  sendRentalRequestContractEmailOnRentApi,
   updateRentalRequestStatusOnRentApi,
   type RentalRequestDto,
   type RentalRequestStatus,
@@ -88,7 +90,7 @@ export function RequestsClient() {
 
   const { data = [], isPending, error } = useQuery({
     queryKey: rentKeys.rentalRequests(),
-    queryFn: fetchRentalRequestsFromRentApi,
+    queryFn: () => fetchRentalRequestsFromRentApi(),
   });
 
   const rows = useMemo(
@@ -113,6 +115,7 @@ export function RequestsClient() {
     }) => updateRentalRequestStatusOnRentApi(id, status, message),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: rentKeys.rentalRequests() });
+      await qc.invalidateQueries({ queryKey: [...rentKeys.all, "vehicleCalendarOccupancy"] });
       toast.success("Talep durumu güncellendi.");
     },
     onError: (e) => {
@@ -125,6 +128,17 @@ export function RequestsClient() {
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: rentKeys.rentalRequests() });
       toast.success("Sözleşme PDF oluşturuldu; indirebilirsiniz.");
+    },
+    onError: (e) => {
+      toast.error(getRentApiErrorMessage(e));
+    },
+  });
+
+  const sendContractEmailMutation = useMutation({
+    mutationFn: (id: string) => sendRentalRequestContractEmailOnRentApi(id),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: rentKeys.rentalRequests() });
+      toast.success("Sözleşme bildirimi e-posta kuyruğuna alındı.");
     },
     onError: (e) => {
       toast.error(getRentApiErrorMessage(e));
@@ -280,6 +294,30 @@ export function RequestsClient() {
     if (!url) return;
     const text = encodeURIComponent(buildEmptyTalepFormMessage(row.customer.fullName, url));
     window.open(`https://wa.me/${phone}?text=${text}`, "_blank", "noopener,noreferrer");
+  };
+
+  const sendContractWhatsApp = (row: RentalRequestDto) => {
+    const phone = normalizedPhoneForWhatsApp(row.customer.phone);
+    if (!phone) {
+      toast.error("WhatsApp için geçerli telefon bulunamadı.");
+      return;
+    }
+    const msg = buildContractPdfWhatsAppMessage(
+      row.customer.fullName,
+      row.referenceNo,
+      row.contractPdfPath,
+    );
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer");
+    toast.success("WhatsApp açıldı.");
+  };
+
+  const openContractPdfUrl = (row: RentalRequestDto) => {
+    const u = row.contractPdfPath?.trim();
+    if (u && (u.startsWith("http://") || u.startsWith("https://"))) {
+      window.open(u, "_blank", "noopener,noreferrer");
+      return;
+    }
+    toast.error("Herkese açık PDF adresi yok; «PDF indir» veya «Mail ile gönder» kullanın.");
   };
 
   return (
@@ -692,37 +730,76 @@ export function RequestsClient() {
                       Reddet
                     </Button>
                     <span className="hidden h-4 w-px bg-border sm:inline" aria-hidden />
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="h-8 gap-1 text-xs"
-                      onClick={() => void copyEmptyFormLink(row)}
-                      title="Ön doldurmasız form bağlantısını kopyala"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Bağlantı
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="h-8 gap-1 text-xs"
-                      onClick={() => sendEmptyFormMail(row)}
-                    >
-                      <Mail className="h-3.5 w-3.5" />
-                      Form e-posta
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      className="h-8 gap-1 text-xs"
-                      onClick={() => sendEmptyFormWhatsApp(row)}
-                    >
-                      <MessageCircle className="h-3.5 w-3.5" />
-                      Form WhatsApp
-                    </Button>
+                    {Boolean(row.contractPdfPath?.trim()) ? (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-8 gap-1 text-xs"
+                          disabled={sendContractEmailMutation.isPending}
+                          onClick={() => void sendContractEmailMutation.mutateAsync(row.id)}
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          Mail ile gönder
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-8 gap-1 text-xs"
+                          onClick={() => sendContractWhatsApp(row)}
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          WhatsApp
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1 text-xs"
+                          onClick={() => openContractPdfUrl(row)}
+                          title="Sözleşme PDF bağlantısını yeni sekmede aç"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                          PDF’yi aç
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 gap-1 text-xs"
+                          onClick={() => void copyEmptyFormLink(row)}
+                          title="Ön doldurmasız form bağlantısını kopyala"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          Form bağlantısı
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-8 gap-1 text-xs"
+                          onClick={() => sendEmptyFormMail(row)}
+                        >
+                          <Mail className="h-3.5 w-3.5" />
+                          Form e-posta
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="secondary"
+                          className="h-8 gap-1 text-xs"
+                          onClick={() => sendEmptyFormWhatsApp(row)}
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          Form WhatsApp
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))}

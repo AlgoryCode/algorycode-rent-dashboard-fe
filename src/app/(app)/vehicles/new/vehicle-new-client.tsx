@@ -15,10 +15,12 @@ import { useFleetVehicles } from "@/hooks/use-fleet-vehicles";
 import {
   fetchCitiesFromRentApi,
   fetchHandoverLocationsFromRentApi,
+  fetchVehicleBodyStylesFromRentApi,
   fetchVehicleOptionTemplatesFromRentApi,
   getRentApiErrorMessage,
   type CityRow,
   type HandoverLocationApiRow,
+  type VehicleBodyStyleRow,
   type VehicleOptionTemplateApiRow,
 } from "@/lib/rent-api";
 import { compactVehicleImages, type VehicleImages } from "@/lib/vehicle-images";
@@ -39,6 +41,23 @@ function normalizePlate(p: string) {
 }
 
 const COUNTRY_NONE = "__none__";
+const SPECS_FUEL_NONE = "__fuel_none__";
+const SPECS_TRANS_NONE = "__trans_none__";
+const SPECS_BODY_NONE = "__body_none__";
+
+const VEHICLE_FUEL_SELECT: { value: string; label: string }[] = [
+  { value: SPECS_FUEL_NONE, label: "Seçilmedi" },
+  { value: "benzin", label: "Benzin" },
+  { value: "dizel", label: "Dizel" },
+  { value: "hibrit", label: "Hibrit" },
+  { value: "elektrik", label: "Elektrik" },
+];
+
+const VEHICLE_TRANSMISSION_SELECT: { value: string; label: string }[] = [
+  { value: SPECS_TRANS_NONE, label: "Seçilmedi" },
+  { value: "otomatik", label: "Otomatik" },
+  { value: "manuel", label: "Manuel" },
+];
 
 export function VehicleNewClient() {
   const router = useRouter();
@@ -67,6 +86,12 @@ export function VehicleNewClient() {
   const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([]);
   const [optionSearch, setOptionSearch] = useState("");
   const [highlightsText, setHighlightsText] = useState("");
+  const [fuelType, setFuelType] = useState(SPECS_FUEL_NONE);
+  const [transmissionType, setTransmissionType] = useState(SPECS_TRANS_NONE);
+  const [bodyStyleCode, setBodyStyleCode] = useState(SPECS_BODY_NONE);
+  const [seats, setSeats] = useState("");
+  const [luggage, setLuggage] = useState("");
+  const [bodyStyleOptions, setBodyStyleOptions] = useState<VehicleBodyStyleRow[]>([]);
 
   const countriesSorted = useMemo(
     () => [...countries].sort((a, b) => a.name.localeCompare(b.name, "tr")),
@@ -82,6 +107,7 @@ export function VehicleNewClient() {
     void fetchHandoverLocationsFromRentApi("PICKUP").then((rows) => setPickupLocs(rows.filter((r) => r.active !== false)));
     void fetchHandoverLocationsFromRentApi("RETURN").then((rows) => setReturnLocs(rows.filter((r) => r.active !== false)));
     void fetchVehicleOptionTemplatesFromRentApi().then((rows) => setOptionTemplates(rows.filter((r) => r.active)));
+    void fetchVehicleBodyStylesFromRentApi().then(setBodyStyleOptions);
   }, []);
 
   const filteredOptionTemplates = useMemo(() => {
@@ -147,12 +173,22 @@ export function VehicleNewClient() {
       toast.error("Araç için ön, arka, sol, sağ, kokpit ve arka koltuk fotoğrafları zorunlu.");
       return;
     }
-    if (!selectedCountryId || !cityId.trim()) {
-      toast.error("Ülke ve şehir seçimi zorunludur (rent-service şehir kaydı).");
+    if (vehicleCountry === COUNTRY_NONE) {
+      toast.error("Ülke seçimi zorunludur.");
       return;
     }
     if (!defaultPickupId.trim()) {
       toast.error("Varsayılan alış noktası seçin.");
+      return;
+    }
+    const seatsParsed = seats.trim() === "" ? undefined : Number.parseInt(seats.trim(), 10);
+    if (seats.trim() !== "" && (!Number.isFinite(seatsParsed) || seatsParsed! < 1 || seatsParsed! > 20)) {
+      toast.error("Koltuk sayısı 1–20 arası veya boş olmalıdır.");
+      return;
+    }
+    const luggageParsed = luggage.trim() === "" ? undefined : Number.parseInt(luggage.trim(), 10);
+    if (luggage.trim() !== "" && (!Number.isFinite(luggageParsed) || luggageParsed! < 0)) {
+      toast.error("Bagaj (valiz) için geçerli bir sayı girin veya boş bırakın.");
       return;
     }
     const highlightsFromText = highlightsText
@@ -174,13 +210,18 @@ export function VehicleNewClient() {
         commissionRatePercent: externalVehicle ? rate : undefined,
         commissionBrokerPhone: externalVehicle ? commissionBrokerPhone.trim() : undefined,
         rentalDailyPrice: rentalPrice,
-        countryCode: vehicleCountry !== COUNTRY_NONE ? vehicleCountry : undefined,
-        cityId: cityId.trim(),
+        countryCode: vehicleCountry,
+        ...(cityId.trim() ? { cityId: cityId.trim() } : {}),
         defaultPickupHandoverLocationId: defaultPickupId.trim(),
         returnHandoverLocationIds: selectedReturnIds.length > 0 ? selectedReturnIds : undefined,
         optionTemplateIds: selectedTemplateIds.length > 0 ? selectedTemplateIds : undefined,
         highlights: highlightsFromText.length > 0 ? highlightsFromText : undefined,
         images,
+        ...(fuelType !== SPECS_FUEL_NONE ? { fuelType } : {}),
+        ...(transmissionType !== SPECS_TRANS_NONE ? { transmissionType } : {}),
+        ...(bodyStyleCode !== SPECS_BODY_NONE ? { bodyStyleCode } : {}),
+        ...(seatsParsed !== undefined ? { seats: seatsParsed } : {}),
+        ...(luggageParsed !== undefined ? { luggage: luggageParsed } : {}),
       });
       toast.success("Araç kaydedildi");
       router.push(`/vehicles/${created.id}`);
@@ -226,11 +267,84 @@ export function VehicleNewClient() {
               onChange={(e) => setYear(e.target.value)}
             />
           </div>
+          <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2.5">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Araç özellikleri
+            </p>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Yakıt türü</Label>
+                <Select value={fuelType} onValueChange={setFuelType}>
+                  <SelectTrigger className="h-9 w-full text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VEHICLE_FUEL_SELECT.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Vites türü</Label>
+                <Select value={transmissionType} onValueChange={setTransmissionType}>
+                  <SelectTrigger className="h-9 w-full text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VEHICLE_TRANSMISSION_SELECT.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label className="text-xs">Araç türü</Label>
+                <Select value={bodyStyleCode} onValueChange={setBodyStyleCode}>
+                  <SelectTrigger className="h-9 w-full text-xs">
+                    <SelectValue placeholder="Seçin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={SPECS_BODY_NONE}>Seçilmedi</SelectItem>
+                    {bodyStyleOptions.map((o) => (
+                      <SelectItem key={o.code} value={o.code}>
+                        {o.labelTr || o.code}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Koltuk sayısı</Label>
+                <Input
+                  className="h-9 text-xs"
+                  inputMode="numeric"
+                  placeholder="Örn. 5"
+                  value={seats}
+                  onChange={(e) => setSeats(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Bagaj (valiz sayısı)</Label>
+                <Input
+                  className="h-9 text-xs"
+                  inputMode="numeric"
+                  placeholder="Örn. 5"
+                  value={luggage}
+                  onChange={(e) => setLuggage(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
           <div className="space-y-1">
             <Label htmlFor="nv-country">Ülke</Label>
             <Select value={vehicleCountry} onValueChange={setVehicleCountry}>
               <SelectTrigger id="nv-country" className="w-full">
-                <SelectValue placeholder="İsteğe bağlı" />
+                <SelectValue placeholder="Ülke seçin" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={COUNTRY_NONE}>Atanmadı</SelectItem>
@@ -251,7 +365,7 @@ export function VehicleNewClient() {
           </div>
           {selectedCountryId ? (
             <div className="space-y-1">
-              <Label htmlFor="nv-city">Şehir</Label>
+              <Label htmlFor="nv-city">Şehir (isteğe bağlı)</Label>
               <Select value={cityId || undefined} onValueChange={setCityId}>
                 <SelectTrigger id="nv-city" className="w-full">
                   <SelectValue placeholder={cities.length ? "Şehir seçin" : "Şehir yükleniyor…"} />

@@ -40,3 +40,18 @@ export function normalizedPhoneForWhatsApp(phone: string): string | null {
   if (digits.startsWith("0") && digits.length === 11) return `9${digits}`;
   return digits;
 }
+
+/** Onaylı talep sözleşme PDF paylaşımı (WhatsApp metni; URL uzun olabilir — wa.me kısaltmaz). */
+export function buildContractPdfWhatsAppMessage(
+  customerName: string,
+  referenceNo: string,
+  contractPdfUrl: string | undefined,
+): string {
+  const name = customerName?.trim() || "Merhaba";
+  const ref = referenceNo?.trim() || "—";
+  const u = contractPdfUrl?.trim() ?? "";
+  if (u.startsWith("http://") || u.startsWith("https://")) {
+    return `${name}, kiralama sözleşmeniz (${ref}) hazır.\n\nPDF: ${u}\n\nİyi günler.`;
+  }
+  return `${name}, kiralama sözleşmeniz (${ref}) hazır. PDF için acentenizle iletişime geçebilirsiniz.\n\nİyi günler.`;
+}

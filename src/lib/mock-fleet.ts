@@ -106,6 +106,22 @@ export type Vehicle = {
   optionDefinitions?: VehicleOptionDefRow[];
   /** rent-service: öne çıkanlar (sıralı metinler) */
   highlights?: string[];
+  /** Motor / teknik (opsiyonel) */
+  engine?: string;
+  /** Yakıt: benzin, dizel, hibrit, elektrik */
+  fuelType?: string;
+  /** Gövde rengi etiketi */
+  bodyColor?: string;
+  /** Koltuk sayısı */
+  seats?: number;
+  /** Bagaj (valiz) kapasitesi — sayı olarak */
+  luggage?: number;
+  /** Vites: otomatik, manuel */
+  transmissionType?: string;
+  /** Gövde tipi kodu (SEDAN, SUV, …) */
+  bodyStyleCode?: string;
+  /** Gövde tipi görünen adı (API) */
+  bodyStyleLabel?: string;
   /** Açıdan görüntüler (data URL, demo saklama) */
   images?: VehicleImages;
 };

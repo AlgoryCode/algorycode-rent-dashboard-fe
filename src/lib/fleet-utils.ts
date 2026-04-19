@@ -6,6 +6,7 @@ import {
   parseISO,
   startOfDay,
 } from "date-fns";
+import type { RentalRequestDto } from "@/lib/rent-api";
 import type { RentalSession, Vehicle } from "@/lib/mock-fleet";
 import { normalizeRentalStatus, rentalCountsForCalendar } from "@/lib/rental-status";
 
@@ -126,6 +127,54 @@ export function bookedDatesForVehicle(sessions: RentalSession[], vehicleId: stri
     }
   }
   return [...set.values()];
+}
+
+/** `GET /vehicles/{id}/calendar/occupancy` aralıkları → takvimde dolu günler (uçlar dahil). */
+export function bookedDatesFromOccupancyRanges(ranges: { startDate: string; endDate: string }[]): Date[] {
+  const set = new Map<number, Date>();
+  for (const r of ranges) {
+    let start: Date;
+    let end: Date;
+    try {
+      start = startOfDay(parseISO(r.startDate));
+      end = startOfDay(parseISO(r.endDate));
+    } catch {
+      continue;
+    }
+    if (end < start) continue;
+    for (const d of eachDayOfInterval({ start, end })) {
+      set.set(d.getTime(), d);
+    }
+  }
+  return [...set.values()];
+}
+
+export function bookedDatesFromRentalRequests(requests: RentalRequestDto[], vehicleId: string): Date[] {
+  const set = new Map<number, Date>();
+  for (const req of requests) {
+    if ((req.vehicleId ?? "") !== vehicleId) continue;
+    if (req.status === "rejected") continue;
+    let start: Date;
+    let end: Date;
+    try {
+      start = startOfDay(parseISO(req.startDate));
+      end = startOfDay(parseISO(req.endDate));
+    } catch {
+      continue;
+    }
+    if (end < start) continue;
+    for (const d of eachDayOfInterval({ start, end })) {
+      set.set(d.getTime(), d);
+    }
+  }
+  return [...set.values()];
+}
+
+export function mergeBookedDateArrays(a: Date[], b: Date[]): Date[] {
+  const map = new Map<number, Date>();
+  for (const d of a) map.set(startOfDay(d).getTime(), startOfDay(d));
+  for (const d of b) map.set(startOfDay(d).getTime(), startOfDay(d));
+  return [...map.values()];
 }
 
 export function isDateBooked(sessions: RentalSession[], vehicleId: string, day: Date): boolean {

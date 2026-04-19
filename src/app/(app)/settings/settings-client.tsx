@@ -117,6 +117,9 @@ export function SettingsClient() {
                   Opsiyonlar
                 </Link>
               </Button>
+              <Button variant="outline" size="sm" className="h-9 justify-start gap-2 text-xs" asChild>
+                <Link href="/settings/vehicle-catalog">Araç özellikleri (yakıt / vites / tür)</Link>
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
