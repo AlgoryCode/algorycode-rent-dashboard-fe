@@ -30,6 +30,33 @@ import { VEHICLE_IMAGE_SLOTS, type VehicleImageSlot } from "@/lib/vehicle-images
 
 const SLOT_KEYS = new Set<string>(VEHICLE_IMAGE_SLOTS.map((s) => s.key));
 
+/**
+ * rent-service DTO’larında `Long` alanlar: JSON’da sayı olmalı.
+ * Dize dizisi (`["1","2"]`) bazı Jackson ayarlarında 400/500’a yol açabiliyor.
+ */
+function rentApiLongValue(raw: string | undefined | null): number | undefined {
+  if (raw == null) return undefined;
+  const t = String(raw).trim();
+  if (!t) return undefined;
+  const n = Number(t);
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return undefined;
+  return n;
+}
+
+function rentApiLongArray(raw: string[] | undefined): number[] | undefined {
+  if (raw === undefined) return undefined;
+  const out: number[] = [];
+  for (const s of raw) {
+    const n = rentApiLongValue(s);
+    if (n !== undefined) out.push(n);
+  }
+  return out;
+}
+
+function rentVehiclePathId(id: string): string {
+  return encodeURIComponent(String(id).trim());
+}
+
 type RetryCfg = InternalAxiosRequestConfig & { __rent401Retried?: boolean };
 
 function attachRent401Refresh(client: AxiosInstance) {
@@ -1171,6 +1198,10 @@ export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Pro
   if (!countryCode || countryCode.length < 2 || countryCode.length > 5) {
     throw new Error("Ülke kodu 2–5 harf olmalıdır.");
   }
+  const pickupLong = rentApiLongValue(payload.defaultPickupHandoverLocationId);
+  if (pickupLong == null) {
+    throw new Error("Alış noktası kimliği geçersiz.");
+  }
   const body: Record<string, unknown> = {
     plate: payload.plate,
     brand: payload.brand,
@@ -1181,12 +1212,13 @@ export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Pro
     externalCompany: payload.externalCompany?.trim() || undefined,
     rentalDailyPrice: payload.rentalDailyPrice,
     countryCode,
-    defaultPickupHandoverLocationId: payload.defaultPickupHandoverLocationId,
+    defaultPickupHandoverLocationId: pickupLong,
     ...(payload.returnHandoverLocationIds != null && payload.returnHandoverLocationIds.length > 0
-      ? { returnHandoverLocationIds: payload.returnHandoverLocationIds }
-      : payload.defaultReturnHandoverLocationId?.trim()
-        ? { defaultReturnHandoverLocationId: payload.defaultReturnHandoverLocationId.trim() }
-        : {}),
+      ? { returnHandoverLocationIds: rentApiLongArray(payload.returnHandoverLocationIds) ?? [] }
+      : (() => {
+          const dr = rentApiLongValue(payload.defaultReturnHandoverLocationId?.trim());
+          return dr != null ? { defaultReturnHandoverLocationId: dr } : {};
+        })()),
     commissionRatePercent:
       payload.external && payload.commissionRatePercent != null && Number.isFinite(payload.commissionRatePercent)
         ? payload.commissionRatePercent
@@ -1195,7 +1227,10 @@ export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Pro
     images: payload.images && Object.keys(payload.images).length > 0 ? payload.images : undefined,
   };
   if (payload.optionTemplateIds && payload.optionTemplateIds.length > 0) {
-    body.optionTemplateIds = payload.optionTemplateIds;
+    const tids = rentApiLongArray(payload.optionTemplateIds);
+    if (tids && tids.length > 0) {
+      body.optionTemplateIds = tids;
+    }
   }
   if (payload.optionDefinitions && payload.optionDefinitions.length > 0) {
     body.optionDefinitions = payload.optionDefinitions.map((o, i) => ({
@@ -1210,8 +1245,9 @@ export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Pro
   if (payload.highlights != null && payload.highlights.length > 0) {
     body.highlights = payload.highlights.map((s) => s.trim()).filter((s) => s.length > 0).slice(0, 30);
   }
-  if (payload.cityId?.trim()) {
-    body.cityId = payload.cityId.trim();
+  const cityLong = rentApiLongValue(payload.cityId?.trim());
+  if (cityLong != null) {
+    body.cityId = cityLong;
   }
   if (payload.engine?.trim()) body.engine = payload.engine.trim();
   if (payload.fuelType?.trim()) body.fuelType = payload.fuelType.trim();
@@ -1225,6 +1261,8 @@ export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Pro
 }
 
 export async function updateVehicleOnRentApi(id: string, payload: UpdateVehiclePayload): Promise<Vehicle> {
+  const pickupLong = rentApiLongValue(payload.defaultPickupHandoverLocationId);
+  const cityLong = rentApiLongValue(payload.cityId?.trim());
   const body: Record<string, unknown> = {
     plate: payload.plate?.trim() || undefined,
     brand: payload.brand?.trim() || undefined,
@@ -1237,17 +1275,20 @@ export async function updateVehicleOnRentApi(id: string, payload: UpdateVehicleP
     commissionRatePercent: payload.commissionRatePercent,
     commissionBrokerPhone: payload.commissionBrokerPhone?.trim() || undefined,
     countryCode: payload.countryCode?.trim()?.toUpperCase() || undefined,
-    cityId: payload.cityId?.trim() || undefined,
-    defaultPickupHandoverLocationId: payload.defaultPickupHandoverLocationId?.trim() || undefined,
+    cityId: cityLong,
+    defaultPickupHandoverLocationId: pickupLong,
     images: payload.images && Object.keys(payload.images).length > 0 ? payload.images : undefined,
   };
   if (payload.returnHandoverLocationIds !== undefined) {
-    body.returnHandoverLocationIds = payload.returnHandoverLocationIds;
-  } else if (payload.defaultReturnHandoverLocationId?.trim()) {
-    body.defaultReturnHandoverLocationId = payload.defaultReturnHandoverLocationId.trim();
+    body.returnHandoverLocationIds = rentApiLongArray(payload.returnHandoverLocationIds) ?? [];
+  } else {
+    const dr = rentApiLongValue(payload.defaultReturnHandoverLocationId?.trim());
+    if (dr != null) {
+      body.defaultReturnHandoverLocationId = dr;
+    }
   }
   if (payload.optionTemplateIds !== undefined) {
-    body.optionTemplateIds = payload.optionTemplateIds;
+    body.optionTemplateIds = rentApiLongArray(payload.optionTemplateIds) ?? [];
   }
   if (payload.optionDefinitions != null) {
     body.optionDefinitions = payload.optionDefinitions.map((o, i) => ({
@@ -1269,12 +1310,12 @@ export async function updateVehicleOnRentApi(id: string, payload: UpdateVehicleP
   if (payload.luggage !== undefined) body.luggage = payload.luggage;
   if (payload.transmissionType !== undefined) body.transmissionType = payload.transmissionType?.trim() || undefined;
   if (payload.bodyStyleCode !== undefined) body.bodyStyleCode = payload.bodyStyleCode?.trim() || undefined;
-  const { data } = await rentClient().patch<unknown>(`/vehicles/${id}`, body);
+  const { data } = await rentClient().patch<unknown>(`/vehicles/${rentVehiclePathId(id)}`, body);
   return mapVehicleFromApi(data as Record<string, unknown>);
 }
 
 export async function deleteVehicleOnRentApi(id: string): Promise<void> {
-  await rentClient().delete(`/vehicles/${id}`);
+  await rentClient().delete(`/vehicles/${rentVehiclePathId(id)}`);
 }
 
 /** Tek slot: data URL veya base64 gövde; sunucu object storage’a yükler. */
@@ -1283,14 +1324,14 @@ export async function replaceVehicleImageSlotOnRentApi(
   slot: VehicleImageSlot,
   imageDataUrl: string,
 ): Promise<Vehicle> {
-  const { data } = await rentClient().put<unknown>(`/vehicles/${vehicleId}/images/${slot}`, {
+  const { data } = await rentClient().put<unknown>(`/vehicles/${rentVehiclePathId(vehicleId)}/images/${slot}`, {
     image: imageDataUrl,
   });
   return mapVehicleFromApi(data as Record<string, unknown>);
 }
 
 export async function deleteVehicleImageSlotOnRentApi(vehicleId: string, slot: VehicleImageSlot): Promise<Vehicle> {
-  const { data } = await rentClient().delete<unknown>(`/vehicles/${vehicleId}/images/${slot}`);
+  const { data } = await rentClient().delete<unknown>(`/vehicles/${rentVehiclePathId(vehicleId)}/images/${slot}`);
   return mapVehicleFromApi(data as Record<string, unknown>);
 }
 

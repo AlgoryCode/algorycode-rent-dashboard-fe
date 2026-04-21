@@ -468,7 +468,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         <RentRbacToastInner />
       </Suspense>
       <aside className="hidden w-52 shrink-0 flex-col border-r border-border bg-card/50 sm:flex">
-        <Link href="/dashboard" className="flex h-12 items-center gap-2 border-b border-border px-4 hover:bg-muted/50">
+        <Link href="/dashboard" className="flex h-12 items-center gap-2 px-4 hover:bg-muted/50">
           <CarFront className="h-5 w-5 shrink-0 text-primary" />
           <div className="min-w-0">
             <p className="truncate text-xs font-semibold leading-tight">AlgoryRent</p>
@@ -680,18 +680,24 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <div className="sticky top-12 z-20 border-b border-border/60 bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:top-11 sm:px-4">
-          <Suspense fallback={<div className="h-4 max-w-xs animate-pulse rounded bg-muted" aria-hidden />}>
-            <AppBreadcrumbs />
-          </Suspense>
-          {showTemplateActions ? (
-            <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-border/50 pt-2">
-              <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={goBack}>
+        <div className="sticky top-12 z-20 bg-background/95 px-3 py-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 sm:top-11 sm:px-4">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+            {showTemplateActions ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 shrink-0 gap-1.5 text-xs"
+                onClick={goBack}
+              >
                 <ArrowLeft className="h-3.5 w-3.5" />
                 {t("shell.back")}
               </Button>
-            </div>
-          ) : null}
+            ) : null}
+            <Suspense fallback={<div className="h-4 min-w-0 max-w-xs flex-1 animate-pulse rounded bg-muted" aria-hidden />}>
+              <AppBreadcrumbs className={showTemplateActions ? "min-w-0 flex-1" : undefined} />
+            </Suspense>
+          </div>
         </div>
 
         <main className="flex-1 overflow-auto p-3 sm:p-4">{children}</main>
