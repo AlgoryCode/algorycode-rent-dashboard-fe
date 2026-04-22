@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/**/*.java": {
+      "maxDuration": 60
+    }
+  }
+}
