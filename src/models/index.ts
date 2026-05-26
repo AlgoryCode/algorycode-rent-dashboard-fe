@@ -1,3 +1,4 @@
+export { COUNTRY_CODE_MAX_LENGTH } from "@/models/vehicle";
 export type {
   CityRow,
   CountryRow,
@@ -21,6 +22,9 @@ export type {
   VehicleFormCatalogBrandRow,
   VehicleFormCatalogModelRow,
   VehicleFormCatalogVehicleStatusRow,
+  HandoverRouteRow,
+  CreateHandoverRoutePayload,
+  UpdateHandoverRoutePayload,
   VehicleOptionDefinitionPayload,
   VehicleOptionTemplateApiRow,
 } from "@/models/vehicle";

@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCountries } from "@/hooks/use-countries";
 import { normalizeHexForColorPicker } from "@/lib/country-color";
+import { COUNTRY_CODE_MAX_LENGTH } from "@/models/vehicle";
 import { rentKeys } from "@/lib/rent-query-keys";
 import { createCountryOnRentApi, getRentApiErrorMessage, patchCountryColorOnRentApi } from "@/lib/rent-api";
 
@@ -74,8 +75,8 @@ export function CountriesClient() {
       toast.error("Ülke kodu gerekli.");
       return;
     }
-    if (code.length > 64) {
-      toast.error("Ülke kodu en fazla 64 karakter olabilir.");
+    if (code.length > COUNTRY_CODE_MAX_LENGTH) {
+      toast.error(`Ülke kodu en fazla ${COUNTRY_CODE_MAX_LENGTH} karakter olabilir.`);
       return;
     }
     if (!name) {
@@ -191,7 +192,7 @@ export function CountriesClient() {
           <DialogHeader>
             <DialogTitle>Yeni ülke</DialogTitle>
             <DialogDescription className="text-xs">
-              Kod benzersiz olmalıdır (en fazla 64 karakter). Aynı kod tekrar eklenemez.
+              Kod benzersiz olmalıdır (en fazla {COUNTRY_CODE_MAX_LENGTH} karakter). Aynı kod tekrar eklenemez.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-1">
@@ -200,9 +201,9 @@ export function CountriesClient() {
               <Input
                 id="add-country-code"
                 className="font-mono uppercase"
-                maxLength={64}
+                maxLength={COUNTRY_CODE_MAX_LENGTH}
                 value={addCode}
-                onChange={(e) => setAddCode(e.target.value.slice(0, 64).toUpperCase())}
+                onChange={(e) => setAddCode(e.target.value.slice(0, COUNTRY_CODE_MAX_LENGTH).toUpperCase())}
                 placeholder="TR"
               />
             </div>

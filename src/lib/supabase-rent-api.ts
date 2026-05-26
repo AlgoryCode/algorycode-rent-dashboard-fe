@@ -20,12 +20,14 @@ import {
 } from "@/lib/rent-api-gateway";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { catalogKindToDb, idStr, randomReference, rowToRecord, toNumId } from "@/lib/supabase-rent-api-helpers";
+import { COUNTRY_CODE_MAX_LENGTH } from "@/models";
 import type {
   CityRow,
   CountryRow,
   CreateCityPayload,
   CreateCountryPayload,
   CreateHandoverLocationPayload,
+  CreateHandoverRoutePayload,
   CreateRentalPayload,
   CreateReservationExtraOptionTemplatePayload,
   CreateVehicleOptionTemplatePayload,
@@ -35,12 +37,14 @@ import type {
   FetchRentalDashboardParams,
   FetchRentalsParams,
   HandoverLocationApiRow,
+  HandoverRouteRow,
   RentalDashboardReport,
   RentalRequestDto,
   RentalRequestFormPayload,
   RentalRequestStatus,
   ReservationExtraOptionTemplateApiRow,
   UpdateHandoverLocationPayload,
+  UpdateHandoverRoutePayload,
   UpdateRentalPayload,
   UpdateReservationExtraOptionTemplatePayload,
   UpdateVehicleOptionTemplatePayload,
@@ -388,20 +392,42 @@ export async function fetchRentalByIdFromRentApi(id: string): Promise<RentalSess
 }
 
 export async function createRentalOnRentApi(payload: CreateRentalPayload): Promise<RentalSession> {
-  const { data, error } = await client()
-    .from("rent_rentals")
-    .insert({
-      vehicle_id: toNumId(payload.vehicleId),
-      customer_id: toNumId(payload.customerId),
-      start_date: payload.startDate,
-      end_date: payload.endDate,
-      status: payload.status ?? "pending",
-      pickup_handover_location_id: payload.pickupHandoverLocationId ?? null,
-      return_handover_location_id: payload.returnHandoverLocationId ?? null,
-      user_id: payload.userId ?? null,
-    })
-    .select()
-    .single();
+  const pickupRaw = payload.pickupHandoverLocationId;
+  const returnRaw = payload.returnHandoverLocationId;
+  const pickupId =
+    pickupRaw != null && String(pickupRaw).trim() !== "" ? toNumId(String(pickupRaw)) : null;
+  const returnId =
+    returnRaw != null && String(returnRaw).trim() !== "" ? toNumId(String(returnRaw)) : null;
+
+  let routeFeeEur = payload.routeFeeEur ?? 0;
+  let handoverRouteId: number | null =
+    payload.handoverRouteId && payload.handoverRouteId.trim()
+      ? toNumId(payload.handoverRouteId.trim())
+      : null;
+
+  if (pickupId != null && returnId != null && (payload.routeFeeEur == null || !handoverRouteId)) {
+    const looked = await lookupHandoverRouteFee(pickupId, returnId);
+    if (payload.routeFeeEur == null) routeFeeEur = looked.feeEur;
+    if (!handoverRouteId && looked.routeId) handoverRouteId = toNumId(looked.routeId);
+  }
+
+  const insertRow: Record<string, unknown> = {
+    vehicle_id: toNumId(payload.vehicleId),
+    customer_id: toNumId(payload.customerId),
+    start_date: payload.startDate,
+    end_date: payload.endDate,
+    status: payload.status ?? "pending",
+    pickup_handover_location_id: pickupId,
+    return_handover_location_id: returnId,
+    user_id: payload.userId ?? null,
+    route_fee_eur: routeFeeEur > 0 ? routeFeeEur : 0,
+    handover_route_id: handoverRouteId,
+    outside_country_travel: Boolean(payload.outsideCountryTravel),
+    green_insurance_fee: payload.greenInsuranceFee ?? null,
+    net_amount: payload.netAmount ?? null,
+  };
+
+  const { data, error } = await client().from("rent_rentals").insert(insertRow).select().single();
   if (error) throw new Error(error.message);
   return fetchRentalByIdFromRentApi(idStr((data as { id: number }).id));
 }
@@ -491,9 +517,13 @@ export async function createCityOnRentApi(payload: CreateCityPayload): Promise<C
 }
 
 export async function createCountryOnRentApi(payload: CreateCountryPayload): Promise<CountryRow> {
+  const code = payload.code.trim().toUpperCase();
+  if (!code || code.length > COUNTRY_CODE_MAX_LENGTH) {
+    throw new Error(`Ülke kodu gerekli (en fazla ${COUNTRY_CODE_MAX_LENGTH} karakter).`);
+  }
   const { data, error } = await client()
     .from("rent_countries")
-    .insert({ code: payload.code.toUpperCase(), name: payload.name, color_code: payload.colorCode })
+    .insert({ code, name: payload.name, color_code: payload.colorCode })
     .select()
     .single();
   if (error) throw new Error(error.message);
@@ -599,6 +629,110 @@ export async function updateHandoverLocationOnRentApi(
 export async function deleteHandoverLocationOnRentApi(id: string): Promise<void> {
   const { error } = await client().from("rent_handover_locations").delete().eq("id", toNumId(id));
   if (error) throw new Error(error.message);
+}
+
+function mapHandoverRouteRow(
+  row: Record<string, unknown>,
+  names?: { pickupById: Map<string, string>; returnById: Map<string, string> },
+): HandoverRouteRow {
+  const pickupId = idStr(row.pickup_handover_location_id as number);
+  const returnId = idStr(row.return_handover_location_id as number);
+  const fee = row.fee_eur != null ? Number(row.fee_eur) : 0;
+  return {
+    id: idStr(row.id as number),
+    pickupHandoverLocationId: pickupId,
+    returnHandoverLocationId: returnId,
+    pickupName: names?.pickupById.get(pickupId),
+    returnName: names?.returnById.get(returnId),
+    feeEur: Number.isFinite(fee) ? fee : 0,
+    active: row.active == null ? true : Boolean(row.active),
+  };
+}
+
+async function handoverRouteNameMaps() {
+  const [pickups, returns] = await Promise.all([
+    fetchHandoverLocationsFromRentApi("PICKUP", { includeInactive: true }),
+    fetchHandoverLocationsFromRentApi("RETURN", { includeInactive: true }),
+  ]);
+  return {
+    pickupById: new Map(pickups.map((p) => [p.id, p.name])),
+    returnById: new Map(returns.map((r) => [r.id, r.name])),
+  };
+}
+
+export async function fetchHandoverRoutesFromRentApi(opts?: {
+  includeInactive?: boolean;
+}): Promise<HandoverRouteRow[]> {
+  let q = client().from("rent_handover_routes").select("*").order("id");
+  if (!opts?.includeInactive) q = q.eq("active", true);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const names = await handoverRouteNameMaps();
+  return (data ?? []).map((r) => mapHandoverRouteRow(r as Record<string, unknown>, names));
+}
+
+export async function createHandoverRouteOnRentApi(payload: CreateHandoverRoutePayload): Promise<HandoverRouteRow> {
+  const { data, error } = await client()
+    .from("rent_handover_routes")
+    .insert({
+      pickup_handover_location_id: toNumId(payload.pickupHandoverLocationId),
+      return_handover_location_id: toNumId(payload.returnHandoverLocationId),
+      fee_eur: payload.feeEur,
+      active: payload.active ?? true,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  const names = await handoverRouteNameMaps();
+  return mapHandoverRouteRow(data as Record<string, unknown>, names);
+}
+
+export async function updateHandoverRouteOnRentApi(
+  id: string,
+  payload: UpdateHandoverRoutePayload,
+): Promise<HandoverRouteRow> {
+  const patch: Record<string, unknown> = {};
+  if (payload.pickupHandoverLocationId != null) {
+    patch.pickup_handover_location_id = toNumId(payload.pickupHandoverLocationId);
+  }
+  if (payload.returnHandoverLocationId != null) {
+    patch.return_handover_location_id = toNumId(payload.returnHandoverLocationId);
+  }
+  if (payload.feeEur != null) patch.fee_eur = payload.feeEur;
+  if (payload.active != null) patch.active = payload.active;
+  const { data, error } = await client()
+    .from("rent_handover_routes")
+    .update(patch)
+    .eq("id", toNumId(id))
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  const names = await handoverRouteNameMaps();
+  return mapHandoverRouteRow(data as Record<string, unknown>, names);
+}
+
+export async function deleteHandoverRouteOnRentApi(id: string): Promise<void> {
+  const { error } = await client().from("rent_handover_routes").delete().eq("id", toNumId(id));
+  if (error) throw new Error(error.message);
+}
+
+async function lookupHandoverRouteFee(
+  pickupId: string | number | null | undefined,
+  returnId: string | number | null | undefined,
+): Promise<{ feeEur: number; routeId: string | null }> {
+  if (pickupId == null || pickupId === "" || returnId == null || returnId === "") {
+    return { feeEur: 0, routeId: null };
+  }
+  const { data, error } = await client()
+    .from("rent_handover_routes")
+    .select("id, fee_eur")
+    .eq("pickup_handover_location_id", toNumId(String(pickupId)))
+    .eq("return_handover_location_id", toNumId(String(returnId)))
+    .eq("active", true)
+    .maybeSingle();
+  if (error || !data) return { feeEur: 0, routeId: null };
+  const fee = Number((data as { fee_eur?: number }).fee_eur ?? 0);
+  return { feeEur: Number.isFinite(fee) ? fee : 0, routeId: idStr((data as { id: number }).id) };
 }
 
 // --- Option templates ---

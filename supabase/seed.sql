@@ -4,6 +4,7 @@
 -- Giriş (Supabase Auth):
 --   admin@algoryrent.test  /  AlgoryRent2026!
 --   operator@algoryrent.test /  AlgoryRent2026!
+--   tkuru@gmail.com / tkuru123
 
 create extension if not exists "pgcrypto";
 
@@ -14,8 +15,10 @@ do $$
 declare
   admin_id uuid := 'a1000001-0001-4001-8001-000000000001';
   operator_id uuid := 'a1000001-0001-4001-8001-000000000002';
+  tkuru_id uuid := 'a1000001-0001-4001-8001-000000000003';
   instance uuid := '00000000-0000-0000-0000-000000000000';
   pwd text := crypt('AlgoryRent2026!', gen_salt('bf'));
+  tkuru_pwd text := crypt('tkuru123', gen_salt('bf'));
 begin
   if not exists (select 1 from auth.users where email = 'admin@algoryrent.test') then
     insert into auth.users (
@@ -62,6 +65,29 @@ begin
       'email', operator_id::text, now(), now(), now()
     );
   end if;
+
+  if not exists (select 1 from auth.users where email = 'tkuru@gmail.com') then
+    insert into auth.users (
+      instance_id, id, aud, role, email, encrypted_password,
+      email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+      created_at, updated_at, confirmation_token, email_change,
+      email_change_token_new, recovery_token, is_super_admin
+    ) values (
+      instance, tkuru_id, 'authenticated', 'authenticated',
+      'tkuru@gmail.com', tkuru_pwd, now(),
+      '{"provider":"email","providers":["email"]}'::jsonb,
+      '{"full_name":"Tarik Kuru"}'::jsonb,
+      now(), now(), '', '', '', '', false
+    );
+    insert into auth.identities (
+      id, user_id, identity_data, provider, provider_id,
+      last_sign_in_at, created_at, updated_at
+    ) values (
+      gen_random_uuid(), tkuru_id,
+      jsonb_build_object('sub', tkuru_id::text, 'email', 'tkuru@gmail.com'),
+      'email', tkuru_id::text, now(), now(), now()
+    );
+  end if;
 end $$;
 
 update rent_profiles
@@ -71,6 +97,10 @@ where email = 'admin@algoryrent.test';
 update rent_profiles
 set rent_roles = '{RENT_MANAGER}'::rent_app_role[], full_name = 'Rent Operator'
 where email = 'operator@algoryrent.test';
+
+update rent_profiles
+set rent_roles = '{RENT_ADMIN}'::rent_app_role[], full_name = 'Tarik Kuru'
+where email = 'tkuru@gmail.com';
 
 -- ---------------------------------------------------------------------------
 -- Coğrafya
@@ -140,6 +170,16 @@ insert into rent_handover_locations (id, kind, name, description, city_id, line_
 on conflict do nothing;
 
 select setval(pg_get_serial_sequence('rent_handover_locations', 'id'), (select coalesce(max(id), 1) from rent_handover_locations));
+
+insert into rent_handover_routes (id, pickup_handover_location_id, return_handover_location_id, fee_eur, active) values
+  (1, 1, 10, 35.00, true),
+  (2, 1, 11, 45.00, true),
+  (3, 2, 10, 0, true),
+  (4, 3, 12, 25.00, true)
+on conflict (pickup_handover_location_id, return_handover_location_id) do update
+set fee_eur = excluded.fee_eur, active = excluded.active;
+
+select setval(pg_get_serial_sequence('rent_handover_routes', 'id'), (select coalesce(max(id), 1) from rent_handover_routes));
 
 -- ---------------------------------------------------------------------------
 -- Opsiyon şablonları
@@ -312,8 +352,9 @@ select setval(pg_get_serial_sequence('rent_payments', 'id'), (select coalesce(ma
 
 insert into rent_panel_users (id, full_name, email, role, active, last_active_at) values
   (1, 'Rent Admin', 'admin@algoryrent.test', 'admin', true, now()),
-  (2, 'Rent Operator', 'operator@algoryrent.test', 'operator', true, now() - interval '1 day')
-on conflict (email) do update set role = excluded.role, active = excluded.active;
+  (2, 'Rent Operator', 'operator@algoryrent.test', 'operator', true, now() - interval '1 day'),
+  (3, 'Tarik Kuru', 'tkuru@gmail.com', 'admin', true, now())
+on conflict (email) do update set role = excluded.role, active = excluded.active, full_name = excluded.full_name;
 
 select setval(pg_get_serial_sequence('rent_panel_users', 'id'), (select coalesce(max(id), 1) from rent_panel_users));
 

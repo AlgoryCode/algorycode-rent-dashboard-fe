@@ -77,6 +77,10 @@ export type RentalSession = {
   discountAmount?: number;
   discountType?: "PERCENT" | "AMOUNT";
   netAmount?: number;
+  routeFeeEur?: number;
+  pickupHandoverLocationId?: string;
+  returnHandoverLocationId?: string;
+  handoverRouteId?: string;
   outsideCountryTravel?: boolean;
   greenInsuranceFee?: number;
   note?: string;

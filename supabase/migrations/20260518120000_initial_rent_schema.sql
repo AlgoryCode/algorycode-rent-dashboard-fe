@@ -69,7 +69,7 @@ create trigger on_auth_user_created
 -- ---------------------------------------------------------------------------
 create table rent_countries (
   id bigserial primary key,
-  code char(2) not null unique,
+  code char(4) not null unique,
   name text not null,
   color_code text not null default '#808080',
   created_at timestamptz not null default now(),
@@ -128,6 +128,20 @@ create table rent_handover_locations (
   updated_at timestamptz not null default now()
 );
 
+create table rent_handover_routes (
+  id bigserial primary key,
+  pickup_handover_location_id bigint not null references rent_handover_locations (id) on delete cascade,
+  return_handover_location_id bigint not null references rent_handover_locations (id) on delete cascade,
+  fee_eur numeric(12, 2) not null default 0,
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (pickup_handover_location_id, return_handover_location_id)
+);
+
+create index rent_handover_routes_pickup_idx on rent_handover_routes (pickup_handover_location_id);
+create index rent_handover_routes_return_idx on rent_handover_routes (return_handover_location_id);
+
 create table rent_vehicle_option_templates (
   id bigserial primary key,
   title text not null,
@@ -172,7 +186,7 @@ create table rent_vehicles (
   commission_rate_percent numeric(5, 2),
   commission_broker_full_name text,
   commission_broker_phone text,
-  country_code char(2),
+  country_code char(4),
   city_id bigint references rent_cities (id) on delete set null,
   engine text,
   fuel_type text,
@@ -246,6 +260,8 @@ create table rent_rentals (
   status rent_rental_status not null default 'pending',
   pickup_handover_location_id bigint references rent_handover_locations (id) on delete set null,
   return_handover_location_id bigint references rent_handover_locations (id) on delete set null,
+  route_fee_eur numeric(12, 2),
+  handover_route_id bigint references rent_handover_routes (id) on delete set null,
   discount_amount numeric(12, 2),
   discount_type rent_discount_type,
   net_amount numeric(12, 2),
@@ -434,7 +450,7 @@ declare
 begin
   foreach t in array array[
     'rent_countries', 'rent_cities', 'rent_vehicle_catalog', 'rent_vehicle_brands',
-    'rent_vehicle_models', 'rent_handover_locations', 'rent_vehicle_option_templates',
+    'rent_vehicle_models', 'rent_handover_locations', 'rent_handover_routes', 'rent_vehicle_option_templates',
     'rent_reservation_extra_option_templates', 'rent_vehicles', 'rent_vehicle_option_definitions',
     'rent_vehicle_return_handover_locations', 'rent_customers', 'rent_customer_record_states',
     'rent_rentals', 'rent_rental_additional_drivers', 'rent_rental_option_lines',

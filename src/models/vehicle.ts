@@ -91,6 +91,8 @@ export type UpdateVehiclePayload = {
   bodyStyleId?: string;
 };
 
+export const COUNTRY_CODE_MAX_LENGTH = 4;
+
 export type CountryRow = {
   id: string;
   code: string;
@@ -138,6 +140,30 @@ export type UpdateHandoverLocationPayload = {
   active?: boolean;
   lineOrder?: number;
   surchargeEur?: number;
+};
+
+export type HandoverRouteRow = {
+  id: string;
+  pickupHandoverLocationId: string;
+  returnHandoverLocationId: string;
+  pickupName?: string;
+  returnName?: string;
+  feeEur: number;
+  active?: boolean;
+};
+
+export type CreateHandoverRoutePayload = {
+  pickupHandoverLocationId: string;
+  returnHandoverLocationId: string;
+  feeEur: number;
+  active?: boolean;
+};
+
+export type UpdateHandoverRoutePayload = {
+  pickupHandoverLocationId?: string;
+  returnHandoverLocationId?: string;
+  feeEur?: number;
+  active?: boolean;
 };
 
 export type VehicleOptionTemplateApiRow = {

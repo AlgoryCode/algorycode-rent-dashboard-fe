@@ -70,6 +70,7 @@ import { useFleetVehicles } from "@/hooks/use-fleet-vehicles";
 import {
   createCustomerOnRentApi,
   fetchHandoverLocationsFromRentApi,
+  fetchHandoverRoutesFromRentApi,
   fetchRentalsFromRentApi,
   fetchRentalRequestsFromRentApi,
   fetchReservationExtraOptionTemplatesFromRentApi,
@@ -79,6 +80,7 @@ import {
   fetchVehicleTransmissionTypesFromRentApi,
   getRentApiErrorMessage,
   type HandoverLocationApiRow,
+  type HandoverRouteRow,
   type RentCustomerRow,
   type VehicleBodyStyleRow,
 } from "@/lib/rent-api";
@@ -98,6 +100,7 @@ import {
   type RentalLogFilterValues,
 } from "@/lib/rental-log-filters";
 import { validateRentalStepInput } from "@/lib/rental-step-validation";
+import { resolveHandoverRouteFee } from "@/lib/handover-route-fee";
 import { vehicleMaintenanceBlocked, type Vehicle } from "@/lib/mock-fleet";
 import { CustomerPickerDialog } from "@/components/customers/customer-picker-dialog";
 import { useCustomerDirectoryRows } from "@/hooks/use-customer-directory-rows";
@@ -332,6 +335,9 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
   const [quickRentExtraOpen, setQuickRentExtraOpen] = useState(false);
   const [vehicleOptsDialogOpen, setVehicleOptsDialogOpen] = useState(false);
   const [rentalOutsideCountryTravel, setRentalOutsideCountryTravel] = useState(false);
+  const [handoverRoutes, setHandoverRoutes] = useState<HandoverRouteRow[]>([]);
+  const [rentalReturnHandoverRows, setRentalReturnHandoverRows] = useState<HandoverLocationApiRow[]>([]);
+  const [selectedReturnHandoverId, setSelectedReturnHandoverId] = useState("");
   const [newCustomerDialogOpen, setNewCustomerDialogOpen] = useState(false);
   const [newCustomerSaving, setNewCustomerSaving] = useState(false);
   const [newCustomerForm, setNewCustomerForm] = useState({ ...NEW_CUSTOMER_DIALOG_DEFAULT });
@@ -515,6 +521,34 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
     setRentalDateSummaryLock(null);
   }, [pickEnd, rentalDateSummaryLock, dateRangeOpen, dialogOpen, rentalFormAsPage]);
 
+  const rentalPickupHandoverId = useMemo(() => {
+    const id = vehicle.defaultPickupHandoverLocation?.id;
+    return id != null ? String(id) : "";
+  }, [vehicle.defaultPickupHandoverLocation?.id]);
+
+  const rentalPickupHandoverName = vehicle.defaultPickupHandoverLocation?.name ?? "—";
+
+  const rentalReturnOptions = useMemo(() => {
+    const fromVehicle = vehicle.returnHandoverLocations?.filter((x) => x.active !== false) ?? [];
+    if (fromVehicle.length > 0) return fromVehicle;
+    return rentalReturnHandoverRows;
+  }, [vehicle.returnHandoverLocations, rentalReturnHandoverRows]);
+
+  const rentalRouteMatch = useMemo(
+    () => resolveHandoverRouteFee(handoverRoutes, rentalPickupHandoverId, selectedReturnHandoverId),
+    [handoverRoutes, rentalPickupHandoverId, selectedReturnHandoverId],
+  );
+
+  useEffect(() => {
+    if (!dialogOpen && !rentalFormAsPage) return;
+    void Promise.all([fetchHandoverRoutesFromRentApi(), fetchHandoverLocationsFromRentApi("RETURN")])
+      .then(([routes, returns]) => {
+        setHandoverRoutes(routes);
+        setRentalReturnHandoverRows(returns.filter((r) => r.active !== false));
+      })
+      .catch(() => {});
+  }, [dialogOpen, rentalFormAsPage]);
+
   const rentalCommissionSnapshot = useMemo(() => vehicleRentalCommissionSnapshot(vehicle, pickStart, pickEnd), [vehicle, pickStart, pickEnd]);
 
   const vehicleOptionRowsForRent = useMemo(
@@ -571,14 +605,15 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
   const rentalSummaryGross = useMemo(() => {
     const opts = rentalSummaryOptionLines.reduce((s, x) => s + x.amount, 0);
     const base = rentalSummaryBaseAmount;
+    const routeFee = rentalRouteMatch.feeEur;
     let sub: number | undefined;
-    if (base != null) sub = base + opts;
-    else if (opts > 0) sub = opts;
+    if (base != null) sub = base + opts + routeFee;
+    else if (opts > 0 || routeFee > 0) sub = opts + routeFee;
     else sub = undefined;
     const greenTry = rentalOutsideCountryTravel ? greenInsuranceFeeDisplayTry() : 0;
     if (greenTry <= 0) return sub;
     return (sub ?? 0) + greenTry;
-  }, [rentalOutsideCountryTravel, rentalSummaryBaseAmount, rentalSummaryOptionLines]);
+  }, [rentalOutsideCountryTravel, rentalSummaryBaseAmount, rentalSummaryOptionLines, rentalRouteMatch.feeEur]);
 
   const rentalSummaryGreenInsuranceTry = rentalOutsideCountryTravel ? greenInsuranceFeeDisplayTry() : 0;
 
@@ -810,8 +845,15 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
       setSelectedRentExtraIds([]);
       setSelectedVehicleOptIds([]);
       setRentalOutsideCountryTravel(false);
+      const defaultReturn =
+        vehicle.defaultReturnHandoverLocation?.id != null
+          ? String(vehicle.defaultReturnHandoverLocation.id)
+          : vehicle.returnHandoverLocations?.[0]?.id != null
+            ? String(vehicle.returnHandoverLocations[0].id)
+            : "";
+      setSelectedReturnHandoverId(defaultReturn);
     },
-    [],
+    [vehicle.defaultReturnHandoverLocation?.id, vehicle.returnHandoverLocations],
   );
 
   const openForDay = useCallback(
@@ -1073,8 +1115,13 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
         userId: null,
         startDate: start,
         endDate: end,
-        pickupHandoverLocationId: null,
-        returnHandoverLocationId: null,
+        pickupHandoverLocationId: rentalPickupHandoverId || null,
+        returnHandoverLocationId: selectedReturnHandoverId || null,
+        routeFeeEur: rentalRouteMatch.feeEur,
+        handoverRouteId: rentalRouteMatch.routeId,
+        netAmount: rentalSummaryNet ?? rentalSummaryGross ?? undefined,
+        outsideCountryTravel: rentalOutsideCountryTravel,
+        greenInsuranceFee: rentalSummaryGreenInsuranceTry > 0 ? rentalSummaryGreenInsuranceTry : undefined,
         customerId: customerIdStr,
         additionalDrivers:
           additionalDrivers.length > 0
@@ -1234,6 +1281,60 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
     setDialogOpen(false);
   }, [rentalStep, goPrevRentalStep, rentalFormAsPage, router]);
 
+  const rentalHandoverLocationBlock = (
+    <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3 sm:p-4">
+      <div className="flex items-start gap-2">
+        <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground">Alış ve teslim</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            Başlangıç noktası aracın varsayılan alış noktasıdır. Teslim seçildiğinde tanımlı rota ücreti kiralamaya eklenir.
+          </p>
+        </div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <Label className="text-xs">Başlangıç (alış)</Label>
+          <div className="rounded-md border border-border/60 bg-background/80 px-3 py-2 text-sm font-medium text-foreground">
+            {rentalPickupHandoverName}
+          </div>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Bitiş (teslim)</Label>
+          {rentalReturnOptions.length === 0 ? (
+            <p className="rounded-md border border-dashed border-border/60 px-3 py-2 text-xs text-muted-foreground">
+              Bu araç için teslim noktası tanımlı değil. Lokasyonlar → Teslim noktalarından ekleyin.
+            </p>
+          ) : (
+            <Select value={selectedReturnHandoverId} onValueChange={setSelectedReturnHandoverId}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Teslim noktası seçin" />
+              </SelectTrigger>
+              <SelectContent>
+                {rentalReturnOptions.map((loc) => (
+                  <SelectItem key={loc.id} value={String(loc.id)}>
+                    {loc.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+      {selectedReturnHandoverId && rentalPickupHandoverId ? (
+        <p className="text-xs text-muted-foreground">
+          Rota ücreti:{" "}
+          <span className="font-semibold text-foreground">
+            {rentalRouteMatch.feeEur > 0 ? formatEur(rentalRouteMatch.feeEur) : "Ücretsiz"}
+          </span>
+          {rentalRouteMatch.routeId == null && rentalRouteMatch.feeEur === 0 ? (
+            <span className="text-muted-foreground"> (bu çift için tanımlı rota yok)</span>
+          ) : null}
+        </p>
+      ) : null}
+    </div>
+  );
+
   const rentalDateSelectionBlock = rentalFormAsPage ? (
     <div className="space-y-3">
       <button
@@ -1341,6 +1442,7 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
           </div>
         </div>
       ) : null}
+      {rentalHandoverLocationBlock}
     </div>
   ) : (
     <div className="space-y-1">
@@ -1406,6 +1508,7 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
           </div>
         </div>
       )}
+      {rentalHandoverLocationBlock}
     </div>
   );
 
@@ -1781,6 +1884,15 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
                     <p className="mt-0.5 font-medium tabular-nums text-foreground">{newCustomerBirthDate || "—"}</p>
                   </div>
                   <div className="rounded-md border border-border/50 bg-background/60 p-3 sm:col-span-2">
+                    <p className="text-[10px] text-muted-foreground">Alış → teslim</p>
+                    <p className="mt-0.5 font-medium text-foreground">
+                      {rentalPickupHandoverName}
+                      {selectedReturnHandoverId
+                        ? ` → ${rentalReturnOptions.find((l) => String(l.id) === selectedReturnHandoverId)?.name ?? "—"}`
+                        : ""}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border/50 bg-background/60 p-3 sm:col-span-2">
                     <p className="text-[10px] text-muted-foreground">Yurt dışı çıkış</p>
                     <p className="mt-0.5 font-medium text-foreground">{rentalOutsideCountryTravel ? "Evet" : "Hayır"}</p>
                   </div>
@@ -1859,6 +1971,20 @@ export function VehicleDetailClient({ vehicle, rentalFormAsPage = false }: Props
                       </div>
                       <p className="shrink-0 text-right tabular-nums font-semibold text-foreground sm:pt-1">
                         {rentalSummaryGreenInsuranceTry > 0 ? formatEur(rentalSummaryGreenInsuranceTry) : "—"}
+                      </p>
+                    </div>
+                  ) : null}
+                  {selectedReturnHandoverId && rentalPickupHandoverId ? (
+                    <div className="flex flex-col gap-1 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground">Rota ücreti</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground">
+                          {rentalPickupHandoverName} →{" "}
+                          {rentalReturnOptions.find((l) => String(l.id) === selectedReturnHandoverId)?.name ?? "Teslim"}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-right tabular-nums font-semibold text-foreground sm:pt-1">
+                        {rentalRouteMatch.feeEur > 0 ? formatEur(rentalRouteMatch.feeEur) : "Ücretsiz"}
                       </p>
                     </div>
                   ) : null}

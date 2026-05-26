@@ -65,7 +65,7 @@ function randomLetters(len: number): string {
 }
 
 function randomCountryCode(): string {
-  const n = 3 + Math.floor(Math.random() * 3);
+  const n = 2 + Math.floor(Math.random() * 3);
   return randomLetters(n);
 }
 

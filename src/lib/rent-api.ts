@@ -243,6 +243,38 @@ export async function deleteHandoverLocationOnRentApi(...args: Parameters<typeof
   return gateway.deleteHandoverLocationOnRentApi(...args);
 }
 
+export async function fetchHandoverRoutesFromRentApi(...args: Parameters<typeof gateway.fetchHandoverRoutesFromRentApi>) {
+  if (isSupabaseDataEnabled()) {
+    const sb = await import("@/lib/supabase-rent-api");
+    return sb.fetchHandoverRoutesFromRentApi(...args);
+  }
+  return gateway.fetchHandoverRoutesFromRentApi(...args);
+}
+
+export async function createHandoverRouteOnRentApi(...args: Parameters<typeof gateway.createHandoverRouteOnRentApi>) {
+  if (isSupabaseDataEnabled()) {
+    const sb = await import("@/lib/supabase-rent-api");
+    return sb.createHandoverRouteOnRentApi(...args);
+  }
+  return gateway.createHandoverRouteOnRentApi(...args);
+}
+
+export async function updateHandoverRouteOnRentApi(...args: Parameters<typeof gateway.updateHandoverRouteOnRentApi>) {
+  if (isSupabaseDataEnabled()) {
+    const sb = await import("@/lib/supabase-rent-api");
+    return sb.updateHandoverRouteOnRentApi(...args);
+  }
+  return gateway.updateHandoverRouteOnRentApi(...args);
+}
+
+export async function deleteHandoverRouteOnRentApi(...args: Parameters<typeof gateway.deleteHandoverRouteOnRentApi>) {
+  if (isSupabaseDataEnabled()) {
+    const sb = await import("@/lib/supabase-rent-api");
+    return sb.deleteHandoverRouteOnRentApi(...args);
+  }
+  return gateway.deleteHandoverRouteOnRentApi(...args);
+}
+
 export async function fetchVehicleOptionTemplatesFromRentApi(...args: Parameters<typeof gateway.fetchVehicleOptionTemplatesFromRentApi>) {
   if (isSupabaseDataEnabled()) {
     const sb = await import("@/lib/supabase-rent-api");

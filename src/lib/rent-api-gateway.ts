@@ -21,6 +21,7 @@ import type { HandoverLocationRefDto, VehicleOptionDefinitionDto, VehicleStatusD
 import { parseVehicleStatusDto, vehicleDtoDefaults } from "@/models/rent-vehicle-dto";
 import type { PaymentLog, PaymentLogStatus } from "@/lib/mock-payments";
 import type { PanelUser, PanelUserRole } from "@/lib/mock-users";
+import { COUNTRY_CODE_MAX_LENGTH } from "@/models";
 import type {
   CityRow,
   CountryRow,
@@ -36,12 +37,16 @@ import type {
   FetchRentalDashboardParams,
   FetchRentalsParams,
   HandoverLocationApiRow,
+  HandoverRouteRow,
+  CreateHandoverRoutePayload,
+  UpdateHandoverRoutePayload,
   RentalDashboardReport,
   RentalRequestDto,
   RentalRequestFormPayload,
   RentalRequestStatus,
   ReservationExtraOptionTemplateApiRow,
   UpdateHandoverLocationPayload,
+  UpdateHandoverRoutePayload,
   UpdateRentalPayload,
   UpdateReservationExtraOptionTemplatePayload,
   UpdateVehicleOptionTemplatePayload,
@@ -180,12 +185,16 @@ export type {
   FetchRentalDashboardParams,
   FetchRentalsParams,
   HandoverLocationApiRow,
+  HandoverRouteRow,
+  CreateHandoverRoutePayload,
+  UpdateHandoverRoutePayload,
   RentalDashboardReport,
   RentalRequestDto,
   RentalRequestFormPayload,
   RentalRequestStatus,
   ReservationExtraOptionTemplateApiRow,
   UpdateHandoverLocationPayload,
+  UpdateHandoverRoutePayload,
   UpdateRentalPayload,
   UpdateReservationExtraOptionTemplatePayload,
   UpdateVehicleOptionTemplatePayload,
@@ -612,6 +621,10 @@ export function mapRentalFromApi(raw: Record<string, unknown>): RentalSession {
         ? (raw.discountType as "PERCENT" | "AMOUNT")
         : undefined,
     netAmount: asOptionalNumber(raw.netAmount),
+    routeFeeEur: asOptionalNumber(raw.routeFeeEur),
+    pickupHandoverLocationId: asOptionalString(raw.pickupHandoverLocationId),
+    returnHandoverLocationId: asOptionalString(raw.returnHandoverLocationId),
+    handoverRouteId: asOptionalString(raw.handoverRouteId),
     options: mappedOptions?.length ? mappedOptions : undefined,
     customer: {
       fullName: String(customer?.fullName ?? ""),
@@ -1031,6 +1044,55 @@ export async function deleteHandoverLocationOnRentApi(id: string): Promise<void>
   await rentClient().delete(`/handover-locations/${encodeURIComponent(id)}`);
 }
 
+export function mapHandoverRouteFromApi(raw: Record<string, unknown>): HandoverRouteRow {
+  const fee = asOptionalNumber(raw.feeEur) ?? 0;
+  return {
+    id: String(raw.id ?? ""),
+    pickupHandoverLocationId: String(raw.pickupHandoverLocationId ?? ""),
+    returnHandoverLocationId: String(raw.returnHandoverLocationId ?? ""),
+    pickupName: asOptionalString(raw.pickupName),
+    returnName: asOptionalString(raw.returnName),
+    feeEur: Number.isFinite(fee) ? fee : 0,
+    active: raw.active == null ? true : Boolean(raw.active),
+  };
+}
+
+export async function fetchHandoverRoutesFromRentApi(opts?: {
+  includeInactive?: boolean;
+}): Promise<HandoverRouteRow[]> {
+  const q = opts?.includeInactive ? "?includeInactive=true" : "";
+  const { data } = await rentClient().get<unknown[]>(`/handover-routes${q}`);
+  if (!Array.isArray(data)) return [];
+  return data.map((row) => mapHandoverRouteFromApi(row as Record<string, unknown>));
+}
+
+export async function createHandoverRouteOnRentApi(payload: CreateHandoverRoutePayload): Promise<HandoverRouteRow> {
+  const { data } = await rentClient().post<unknown>("/handover-routes", {
+    pickupHandoverLocationId: payload.pickupHandoverLocationId.trim(),
+    returnHandoverLocationId: payload.returnHandoverLocationId.trim(),
+    feeEur: payload.feeEur,
+    active: payload.active,
+  });
+  return mapHandoverRouteFromApi(data as Record<string, unknown>);
+}
+
+export async function updateHandoverRouteOnRentApi(
+  id: string,
+  payload: UpdateHandoverRoutePayload,
+): Promise<HandoverRouteRow> {
+  const body: Record<string, unknown> = {};
+  if (payload.pickupHandoverLocationId != null) body.pickupHandoverLocationId = payload.pickupHandoverLocationId.trim();
+  if (payload.returnHandoverLocationId != null) body.returnHandoverLocationId = payload.returnHandoverLocationId.trim();
+  if (payload.feeEur != null) body.feeEur = payload.feeEur;
+  if (payload.active != null) body.active = payload.active;
+  const { data } = await rentClient().patch<unknown>(`/handover-routes/${encodeURIComponent(id)}`, body);
+  return mapHandoverRouteFromApi(data as Record<string, unknown>);
+}
+
+export async function deleteHandoverRouteOnRentApi(id: string): Promise<void> {
+  await rentClient().delete(`/handover-routes/${encodeURIComponent(id)}`);
+}
+
 export async function fetchVehicleOptionTemplatesFromRentApi(opts?: {
   includeInactive?: boolean;
 }): Promise<VehicleOptionTemplateApiRow[]> {
@@ -1195,8 +1257,8 @@ export async function createVehicleModelOnRentApi(
 
 export async function createVehicleOnRentApi(payload: CreateVehiclePayload): Promise<Vehicle> {
   const countryCode = payload.countryCode?.trim().toUpperCase();
-  if (!countryCode || countryCode.length > 64) {
-    throw new Error("Ülke kodu gerekli (en fazla 64 karakter).");
+  if (!countryCode || countryCode.length > COUNTRY_CODE_MAX_LENGTH) {
+    throw new Error(`Ülke kodu gerekli (en fazla ${COUNTRY_CODE_MAX_LENGTH} karakter).`);
   }
   const pickupLong = rentApiLongValue(payload.defaultPickupHandoverLocationId);
   if (pickupLong == null) {
@@ -1381,6 +1443,11 @@ export async function createRentalOnRentApi(payload: CreateRentalPayload): Promi
     endDate: payload.endDate,
     pickupHandoverLocationId: payload.pickupHandoverLocationId ?? null,
     returnHandoverLocationId: payload.returnHandoverLocationId ?? null,
+    routeFeeEur: payload.routeFeeEur ?? undefined,
+    handoverRouteId: payload.handoverRouteId ?? undefined,
+    netAmount: payload.netAmount ?? undefined,
+    outsideCountryTravel: payload.outsideCountryTravel ?? undefined,
+    greenInsuranceFee: payload.greenInsuranceFee ?? undefined,
     customerId,
     additionalDrivers,
     status: payload.status ?? null,

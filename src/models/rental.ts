@@ -3,8 +3,13 @@ export type CreateRentalPayload = {
   userId?: string | null;
   startDate: string;
   endDate: string;
-  pickupHandoverLocationId?: number | null;
-  returnHandoverLocationId?: number | null;
+  pickupHandoverLocationId?: number | string | null;
+  returnHandoverLocationId?: number | string | null;
+  routeFeeEur?: number;
+  handoverRouteId?: string | null;
+  netAmount?: number;
+  outsideCountryTravel?: boolean;
+  greenInsuranceFee?: number;
   customerId: string;
   additionalDrivers?: {
     fullName: string;

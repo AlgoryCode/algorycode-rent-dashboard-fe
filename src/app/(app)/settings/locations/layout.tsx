@@ -13,12 +13,16 @@ export default function LocationsSettingsLayout({ children }: { children: React.
   const tabs = [
     { href: "/settings/locations/pickup", label: t("nav.handoverPickup") },
     { href: "/settings/locations/return", label: t("nav.handoverReturn") },
+    { href: "/settings/locations/routes", label: t("nav.handoverRoutes") },
     { href: "/settings/locations/countries", label: t("nav.countries") },
   ];
 
   const isActive = (href: string) => {
     if (href === "/settings/locations/countries") {
       return pathname.startsWith("/settings/locations/countries");
+    }
+    if (href === "/settings/locations/routes") {
+      return pathname === href;
     }
     return pathname === href;
   };
